@@ -1,129 +1,377 @@
-import time
-import os
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5203039798099176"
+     crossorigin="anonymous"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flappy Bird Improved</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
-# --- Game Configuration ---
-# You can change these to make the game harder or easier
-# For example, on a slow computer, you might increase the time limit.
-# TIME_LIMIT_SECONDS = 5  # This feature is removed for a simpler, prompt-based game
+  * {
+    box-sizing: border-box;
+  }
 
-# --- Helper Functions ---
-def clear_screen():
-    """Clears the terminal screen."""
-    os.system('cls' if os.name == 'nt' else 'clear')
+  body {
+    margin: 0;
+    background: linear-gradient(to bottom, #70c5ce 0%, #33a0d3 100%);
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    user-select: none;
+    font-family: 'Press Start 2P', cursive;
+    color: #fff;
+  }
 
-def typewriter_effect(text, delay=0.03):
-    """Prints text with a typewriter effect."""
-    for char in text:
-        print(char, end='', flush=True)
-        time.sleep(delay)
-    print()
+  canvas {
+    background: #70c5ce;
+    display: block;
+    border-radius: 15px;
+    box-shadow:
+      0 8px 20px rgba(0, 0, 0, 0.4),
+      inset 0 -5px 30px #3db5e5;
+  }
 
-def get_attempts():
-    """Gets the attempt count from a file."""
-    try:
-        with open("attempts_stereo_madness.txt", "r") as f:
-            return int(f.read())
-    except (FileNotFoundError, ValueError):
-        return 1
+  #score {
+    position: absolute;
+    top: 15px;
+    font-size: 40px;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 6px #0008;
+    user-select: none;
+  }
 
-def save_attempts(attempts):
-    """Saves the attempt count to a file."""
-    with open("attempts_stereo_madness.txt", "w") as f:
-        f.write(str(attempts))
+  #message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    text-align: center;
+    color: #fff;
+    text-shadow: 2px 2px 6px #000c;
+    user-select: none;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="score">0</div>
+<div id="message">Press Space or Click to Start</div>
+<canvas id="game" width="400" height="600"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const messageEl = document.getElementById('message');
 
-# --- Level Definition ---
-# Each dictionary is a unique challenge in the level.
-LEVEL_STEREO_MADNESS = [
-    {'progress': 5,  'desc': "The level begins. A single block approaches.", 'action': "jump"},
-    {'progress': 10, 'desc': "Another block, easy does it.", 'action': "jump"},
-    {'progress': 15, 'desc': "A staircase of four blocks! Quick succession!", 'action': "jump jump jump jump"},
-    {'progress': 22, 'desc': "You see a glowing yellow pad on the ground.", 'action': "wait"},
-    {'progress': 28, 'desc': "Another pad, but this one is on top of a block.", 'action': "jump"},
-    {'progress': 30, 'mode_change': "You fly into a pink portal... YOU ARE NOW A SHIP!", 'new_controls': "Controls: Type sequences like 'up down' to navigate."},
-    {'progress': 40, 'desc': "Navigate a simple corridor. Go up, then down.", 'action': "up down"},
-    {'progress': 48, 'desc': "A trickier pass. Go up, stay level, then go up again.", 'action': "up wait up"},
-    {'progress': 50, 'mode_change': "THE BEAT DROPS! You exit through an orange portal and the world FLIPS!", 'new_controls': "You are an upside-down cube. Type 'jump' to jump DOWN."},
-    {'progress': 58, 'desc': "An upside-down platform. Jump down to clear the gap.", 'action': "jump"},
-    {'progress': 65, 'desc': "Two spikes hang from the 'ground' below you. Make two quick jumps.", 'action': "jump jump"},
-    {'progress': 66, 'mode_change': "Another ship portal! You're an upside-down ship in a tight space!", 'new_controls': "Navigate carefully! 'up' is now towards the middle."},
-    {'progress': 75, 'desc': "The corridor is tight. Weave through: down, up, down.", 'action': "down up down"},
-    {'progress': 81, 'desc': "You exit the portal, back to a normal cube.", 'action': ""}, # No action, just a transition
-    {'progress': 85, 'desc': "The final stretch! A simple block jump.", 'action': "jump"},
-    {'progress': 95, 'desc': "The final, iconic challenge... THREE SPIKES IN A ROW!", 'action': "jump jump jump"},
-]
+  const WIDTH = canvas.width;
+  const HEIGHT = canvas.height;
 
-# --- Main Game Logic ---
-def run_game():
-    """The main game loop."""
-    attempts = get_attempts()
-    
-    while True: # This loop represents one attempt
-        clear_screen()
-        print("========================================")
-        print("        GEOMETRY DASH: TEXT MODE        ")
-        print("          LEVEL 1: STEREO MADNESS       ")
-        print(f"            ATTEMPT: {attempts}            ")
-        print("========================================")
-        time.sleep(2)
+  // Sounds
+  const sounds = {
+    flap: new Audio('https://freesound.org/data/previews/341/341695_62469-lq.mp3'),
+    hit: new Audio('https://freesound.org/data/previews/198/198841_2859972-lq.mp3'),
+    point: new Audio('https://freesound.org/data/previews/109/109662_945474-lq.mp3')
+  };
 
-        is_dead = False
-        current_progress = 0
+  sounds.flap.volume = 0.15;
+  sounds.hit.volume = 0.3;
+  sounds.point.volume = 0.2;
 
-        for challenge in LEVEL_STEREO_MADNESS:
-            # Handle mode changes
-            if 'mode_change' in challenge:
-                print("\n" + ("-"*40))
-                typewriter_effect(f"PROGRESS: {challenge['progress']}% ... {challenge['mode_change']}")
-                if 'new_controls' in challenge:
-                    typewriter_effect(f"--> {challenge['new_controls']}")
-                print(("-")*40 + "\n")
-                time.sleep(2.5)
-                # If it's a pure transition, skip to next challenge
-                if not challenge.get('action'): 
-                    continue
-            
-            # Display the challenge
-            print(f"--- Progress: {current_progress}% ---")
-            typewriter_effect(challenge['desc'])
-            
-            # Get player input
-            player_input = input("> ").strip().lower()
+  // Bird properties
+  const bird = {
+    x: 80,
+    y: HEIGHT / 2,
+    width: 34,
+    height: 24,
+    gravity: 0.6,
+    lift: -11,
+    velocity: 0,
+    rotation: 0,
+    maxRotation: 25 * Math.PI / 180,
+    minRotation: -60 * Math.PI / 180,
+    jump() {
+      this.velocity = this.lift;
+      sounds.flap.currentTime = 0;
+      sounds.flap.play();
+    },
+    update() {
+      this.velocity += this.gravity;
+      this.velocity *= 0.9; // air resistance
+      this.y += this.velocity;
 
-            # Check if the action is correct
-            if player_input == challenge['action']:
-                current_progress = challenge['progress']
-                print("... Clear! ...\n")
-                time.sleep(0.5)
-            else:
-                is_dead = True
-                break # Exit the for loop for this attempt
-        
-        # --- End of Attempt ---
-        if is_dead:
-            print("\n" + "#" * 40)
-            print("                CRASH!                ")
-            print("#" * 40)
-            attempts += 1
-            save_attempts(attempts)
-            time.sleep(2)
-            # The outer while loop will restart the attempt
-        else:
-            # If the loop finishes without dying, you win
-            clear_screen()
-            print("\n" + "*" * 40)
-            print("          LEVEL COMPLETE! ★           ")
-            print(f"     Finished in {attempts} attempts.     ")
-            print("*" * 40)
-            
-            # Reset attempts for the "next level"
-            save_attempts(1) 
-            
-            print("\nYou have beaten the text-based Stereo Madness!")
-            print("Run the program again to play 'Back on Track' (if it existed!).")
-            break # Exit the main game loop
+      // Rotation logic for bird tilting
+      if (this.velocity < 0) {
+        this.rotation = this.minRotation;
+      } else if (this.velocity > 5) {
+        this.rotation = this.maxRotation;
+      } else {
+        this.rotation = this.velocity / 5 * this.maxRotation;
+      }
 
-if __name__ == "__main__":
-    try:
-        run_game()
-    except KeyboardInterrupt:
-        print("\n\nGame closed. See you next time!")
+      if (this.y + this.height > HEIGHT - ground.height) {
+        this.y = HEIGHT - ground.height - this.height;
+        this.velocity = 0;
+      }
+      if (this.y < 0) {
+        this.y = 0;
+        this.velocity = 0;
+      }
+    },
+    draw() {
+      ctx.save();
+      ctx.translate(this.x + this.width/2, this.y + this.height/2);
+      ctx.rotate(this.rotation);
+
+      // Bird body
+      const grad = ctx.createRadialGradient(0, 0, this.width/4, 0, 0, this.width/2);
+      grad.addColorStop(0, '#FFEB3B');
+      grad.addColorStop(1, '#FBC02D');
+      ctx.fillStyle = grad;
+      ctx.strokeStyle = '#C9A900';
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      ctx.ellipse(0, 0, this.width/2, this.height/2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Eye
+      ctx.fillStyle = '#222';
+      ctx.beginPath();
+      ctx.ellipse(5, -3, 4, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Beak
+      ctx.fillStyle = '#FF9800';
+      ctx.beginPath();
+      ctx.moveTo(this.width/2, 0);
+      ctx.lineTo(this.width/2 + 10, -5);
+      ctx.lineTo(this.width/2 + 10, 5);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+  };
+
+  // Ground properties
+  const ground = {
+    height: 80,
+    speed: 2,
+    x: 0,
+    draw() {
+      // draw a simple ground with grass effect
+      const groundHeight = this.height;
+      ctx.fillStyle = '#DEB887';
+      ctx.fillRect(0, HEIGHT - groundHeight, WIDTH, groundHeight);
+
+      // grass blades
+      ctx.fillStyle = '#228B22';
+      for(let i = this.x; i < WIDTH; i += 20) {
+        ctx.beginPath();
+        ctx.moveTo(i, HEIGHT - groundHeight);
+        ctx.lineTo(i + 5, HEIGHT - groundHeight - 20);
+        ctx.lineTo(i + 10, HEIGHT - groundHeight);
+        ctx.closePath();
+        ctx.fill();
+      }
+    },
+    update() {
+      this.x -= this.speed;
+      if(this.x <= -20) this.x = 0;
+    }
+  };
+
+  // Pipes properties
+  const pipeWidth = 70;
+  const pipeGap = 140;
+  const pipeSpeed = 2;
+  let pipes = [];
+
+  function createPipe() {
+    // Random height for the top pipe
+    const minHeight = 50;
+    const maxHeight = HEIGHT - ground.height - pipeGap - 50;
+    const topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+    pipes.push({
+      x: WIDTH,
+      top: topHeight,
+      bottom: HEIGHT - ground.height - (topHeight + pipeGap),
+      passed: false
+    });
+  }
+
+  // Game state
+  let score = 0;
+  let frames = 0;
+  let gameState = 'start'; // 'start', 'playing', 'gameover'
+
+  function resetGame() {
+    pipes = [];
+    score = 0;
+    frames = 0;
+    bird.y = HEIGHT / 2;
+    bird.velocity = 0;
+    gameState = 'start';
+    scoreEl.textContent = '0';
+    messageEl.textContent = 'Press Space or Click to Start';
+  }
+
+  // Detect collision between bird and pipes
+  function collision(pipe) {
+    const bx = bird.x;
+    const by = bird.y;
+    const bw = bird.width;
+    const bh = bird.height;
+
+    // Check top pipe
+    if (
+      bx + bw > pipe.x &&
+      bx < pipe.x + pipeWidth &&
+      by < pipe.top
+    ) {
+      return true;
+    }
+    // Check bottom pipe
+    if (
+      bx + bw > pipe.x &&
+      bx < pipe.x + pipeWidth &&
+      by + bh > HEIGHT - ground.height - pipe.bottom
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  // Draw pipes with nice shading
+  function drawPipe(x, y, height, isTop) {
+    ctx.fillStyle = '#228B22';
+    ctx.strokeStyle = '#176517';
+    ctx.lineWidth = 4;
+
+    // Pipe body
+    ctx.fillRect(x, y, pipeWidth, height);
+    ctx.strokeRect(x, y, pipeWidth, height);
+
+    // Pipe rim (ellipse)
+    ctx.beginPath();
+    if(isTop) {
+      ctx.ellipse(x + pipeWidth/2, y + height, pipeWidth/2, 15, 0, Math.PI, 0, true);
+    } else {
+      ctx.ellipse(x + pipeWidth/2, y, pipeWidth/2, 15, 0, 0, Math.PI, true);
+    }
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Game loop
+  function update() {
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+    // Background gradient handled by CSS, no need to draw sky here
+
+    // Update and draw ground
+    ground.update();
+    ground.draw();
+
+    if(gameState === 'start') {
+      bird.draw();
+      messageEl.style.display = 'block';
+    } else if (gameState === 'playing') {
+      messageEl.style.display = 'none';
+
+      // Update bird
+      bird.update();
+      bird.draw();
+
+      // Pipes generation
+      if (frames % 90 === 0) {
+        createPipe();
+      }
+
+      // Move pipes and draw them
+      for (let i = 0; i < pipes.length; i++) {
+        const p = pipes[i];
+        p.x -= pipeSpeed;
+
+        drawPipe(p.x, 0, p.top, true); // top pipe
+        drawPipe(p.x, HEIGHT - ground.height - p.bottom, p.bottom, false); // bottom pipe
+
+        // Check collision
+        if (collision(p)) {
+          sounds.hit.play();
+          gameState = 'gameover';
+          messageEl.textContent = 'Game Over\nPress Space or Click to Restart';
+          messageEl.style.display = 'block';
+        }
+
+        // Check if passed for scoring
+        if (!p.passed && p.x + pipeWidth < bird.x) {
+          score++;
+          p.passed = true;
+          scoreEl.textContent = score;
+          sounds.point.play();
+        }
+      }
+
+      // Remove off-screen pipes
+      pipes = pipes.filter(p => p.x + pipeWidth > 0);
+
+      // Check if bird hits ground or ceiling
+      if (bird.y + bird.height >= HEIGHT - ground.height || bird.y <= 0) {
+        sounds.hit.play();
+        gameState = 'gameover';
+        messageEl.textContent = 'Game Over\nPress Space or Click to Restart';
+        messageEl.style.display = 'block';
+      }
+    } else if (gameState === 'gameover') {
+      bird.draw();
+
+      // Draw pipes
+      for (let p of pipes) {
+        drawPipe(p.x, 0, p.top, true);
+        drawPipe(p.x, HEIGHT - ground.height - p.bottom, p.bottom, false);
+      }
+    }
+
+    frames++;
+    requestAnimationFrame(update);
+  }
+
+  // Controls
+  function flap() {
+    if (gameState === 'start') {
+      gameState = 'playing';
+      messageEl.style.display = 'none';
+      bird.jump();
+    } else if (gameState === 'playing') {
+      bird.jump();
+    } else if (gameState === 'gameover') {
+      resetGame();
+    }
+  }
+
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+      e.preventDefault();
+      flap();
+    }
+  });
+
+  window.addEventListener('mousedown', e => {
+    flap();
+  });
+
+  // Start game
+  resetGame();
+  update();
+})();
+</script>
+</body>
+</html>
