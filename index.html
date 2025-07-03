@@ -1,7 +1,258 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5203039798099176"
-     crossorigin="anonymous"></script>
-  
+     crossorigin="anonymous"></script>     
+  <meta charset="UTF-8" />
+  <title>Speed Draw Game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom, #1a1a2e, #16213e);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 36px;
+      text-shadow: 0 0 10px cyan;
+    }
+    #startScreen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 30px;
+    }
+    #topicDisplay {
+      font-size: 56px;
+      font-weight: bold;
+      color: #00adb5;
+      text-shadow: 0 0 15px #00adb5;
+      text-align: center;
+      max-width: 90vw;
+    }
+    #info, #tools, #canvas, #timesUp {
+      display: none;
+    }
+    #info {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 15px 25px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      font-size: 18px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+      width: fit-content;
+    }
+    #tools {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 10px 20px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      width: fit-content;
+    }
+    select, input[type="color"], input[type="range"], button {
+      padding: 5px 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+    }
+    button {
+      background: #00adb5;
+      color: white;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      background: #00979e;
+    }
+    canvas {
+      border: 4px solid #fff;
+      border-radius: 10px;
+      background: white;
+      box-shadow: 0 0 20px #000;
+      margin-top: 10px;
+      cursor: crosshair;
+      max-width: 90vw;
+    }
+    #timesUp {
+      font-size: 40px;
+      color: red;
+      font-weight: bold;
+      margin-top: 20px;
+      text-shadow: 0 0 15px red;
+      animation: pulse 1s infinite;
+      display: none;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.7; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
 </head>
+<body>
+
+  <div id="startScreen">
+    <h1>🎨 Draw</h1>
+    <div id="topicDisplay">Loading...</div>
+    <button id="startButton">Start Game</button>
+  </div>
+
+  <div id="info">
+    <div><strong>Prompt:</strong> <span id="prompt">???</span></div>
+    <div><strong>Time Left:</strong> <span id="timer">60</span>s</div>
+  </div>
+
+  <div id="tools">
+    <select id="tool">
+      <option value="brush">Brush</option>
+      <option value="eraser">Eraser</option>
+    </select>
+
+    <label>Color: <input type="color" id="color" value="#000000" /></label>
+    <label>Size: <input type="range" id="size" min="1" max="50" value="5" /></label>
+    <button id="clear">🧼 Clear</button>
+  </div>
+
+  <canvas id="canvas" width="800" height="500"></canvas>
+
+  <div id="timesUp">⏰ Time's Up!</div>
+
+  <button id="playAgainBtn" style="display:none; margin-top:20px; padding:10px 20px; font-size:18px; border:none; border-radius:8px; background:#00adb5; color:#fff; cursor:pointer;">Play Again</button>
+
+  <script>
+    const prompts = [
+      "Cat", "Rainbow", "Tree", "Dragon", "House", "Pizza", "Rocket", "Ghost", "Ocean", "Laptop", "Book", "Flower"
+    ];
+
+    const startScreen = document.getElementById("startScreen");
+    const topicDisplay = document.getElementById("topicDisplay");
+    const startButton = document.getElementById("startButton");
+    const info = document.getElementById("info");
+    const tools = document.getElementById("tools");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const promptText = document.getElementById("prompt");
+    const timerDisplay = document.getElementById("timer");
+    const timesUpText = document.getElementById("timesUp");
+    const playAgainBtn = document.getElementById("playAgainBtn");
+
+    const toolSelect = document.getElementById("tool");
+    const colorPicker = document.getElementById("color");
+    const sizeSlider = document.getElementById("size");
+    const clearBtn = document.getElementById("clear");
+
+    let painting = false;
+    let drawingEnabled = false;
+    let timeLeft = 60;
+    let currentPrompt = "";
+
+    function pickRandomPrompt() {
+      return prompts[Math.floor(Math.random() * prompts.length)];
+    }
+
+    function resetGame() {
+      painting = false;
+      drawingEnabled = false;
+      timeLeft = 60;
+      timerDisplay.textContent = timeLeft;
+      timesUpText.style.display = "none";
+      playAgainBtn.style.display = "none";
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Hide game UI, show start screen and update topic
+      info.style.display = "none";
+      tools.style.display = "none";
+      canvas.style.display = "none";
+      startScreen.style.display = "flex";
+
+      currentPrompt = pickRandomPrompt();
+      topicDisplay.textContent = currentPrompt;
+    }
+
+    function startGame() {
+      startScreen.style.display = "none";
+      info.style.display = "flex";
+      tools.style.display = "flex";
+      canvas.style.display = "block";
+
+      promptText.textContent = currentPrompt;
+      drawingEnabled = true;
+      timeLeft = 60;
+      timerDisplay.textContent = timeLeft;
+
+      const timer = setInterval(() => {
+        timeLeft--;
+        timerDisplay.textContent = timeLeft;
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          drawingEnabled = false;
+          timesUpText.style.display = "block";
+          playAgainBtn.style.display = "inline-block";
+        }
+      }, 1000);
+    }
+
+    function startDrawing(e) {
+      if (!drawingEnabled) return;
+      painting = true;
+      draw(e);
+    }
+
+    function stopDrawing() {
+      painting = false;
+      ctx.beginPath();
+    }
+
+    function draw(e) {
+      if (!painting || !drawingEnabled) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      ctx.lineWidth = sizeSlider.value;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = toolSelect.value === "eraser" ? "white" : colorPicker.value;
+
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    }
+
+    clearBtn.addEventListener("click", () => {
+      if (!drawingEnabled) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    canvas.addEventListener("mousedown", startDrawing);
+    canvas.addEventListener("mouseup", stopDrawing);
+    canvas.addEventListener("mouseout", stopDrawing);
+    canvas.addEventListener("mousemove", draw);
+
+    startButton.addEventListener("click", startGame);
+    playAgainBtn.addEventListener("click", resetGame);
+
+    // Initialize on load
+    resetGame();
+  </script>
+</body>
 </html>
