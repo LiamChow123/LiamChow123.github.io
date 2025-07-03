@@ -1,30 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5203039798099176"
-     crossorigin="anonymous"></script>   
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project: Web Blade</title>
+    <title>Bladefall</title>
     <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <!-- This is where the game will be rendered -->
+</head><body>
     <canvas id="game-canvas"></canvas>
 
-    <!-- Info/Instructions Overlay -->
-    <div id="info-overlay">
-        <h1>Project: Web Blade</h1>
-        <p><strong>Controls:</strong></p>
-        <p><strong>WASD:</strong> Move</p>
-        <p><strong>Mouse:</strong> Control the Sword</p>
-        <p><strong>Space:</strong> Jump</p>
-        <p><strong>Shift:</strong> Sprint</p>
-        <!-- THIS LINE IS UPDATED -->
-        <p><strong>Press ENTER to Start!</strong></p> 
+    <!-- In-Game HUD Elements -->
+    <div id="hud">
+        <div id="crosshair">+</div>
+        <div class="bar-container">
+            <span>HEALTH</span>
+            <div id="health-bar-bg">
+                <div id="health-bar"></div>
+            </div>
+        </div>
+        <div class="bar-container">
+            <span>STAMINA</span>
+            <div id="stamina-bar-bg">
+                <div id="stamina-bar"></div>
+            </div>
+        </div>
     </div>
 
-    <!-- Import the required libraries from a CDN (no downloads needed!) -->
+    <!-- Start/End Game Overlay -->
+    <div id="overlay">
+        <h1 id="overlay-title">BLADEFALL</h1>
+        <p id="overlay-text">
+            <strong>WASD:</strong> Move | <strong>Mouse:</strong> Aim/Attack<br>
+            <strong>Shift:</strong> Sprint | <strong>Space:</strong> Jump<br>
+            <strong>Right-Click:</strong> Block | <strong>F:</strong> Kick<br><br>
+            Defeat the Red Knight!<br><br>
+            <strong class="pulse">Press ENTER to Begin</strong>
+        </p>
+    </div>
+
+    <!-- Import Libraries -->
     <script type="importmap">
         {
             "imports": {
@@ -34,7 +47,7 @@
         }
     </script>
     
-    <!-- Your game's main logic -->
+    <!-- Game Logic -->
     <script type="module" src="main.js"></script>
 </body>
 </html>
