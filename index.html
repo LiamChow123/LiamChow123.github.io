@@ -3,17 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Bullet Break: Crowd Control</title>
+<title>Crowd Control: Polished Edition</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
 
   body {
     margin: 0;
-    background: linear-gradient(to bottom, #2c3e50 0%, #000000 100%); /* Darker, grittier */
+    background: #111;
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -25,22 +23,20 @@
   }
 
   canvas {
-    background: rgba(10, 10, 20, 0.4);
+    background: linear-gradient(to bottom, #2c3e50 0%, #000000 100%);
     display: block;
-    border: 3px solid rgba(255, 255, 255, 0.4);
-    border-radius: 15px;
+    border: 3px solid rgba(255, 255, 255, 0.5);
+    border-radius: 5px;
     box-shadow:
-      0 8px 20px rgba(0, 0, 0, 0.4),
-      inset 0 0 40px rgba(255, 255, 255, 0.1);
+      0 0 30px rgba(0, 191, 255, 0.4),
+      inset 0 0 20px rgba(0, 0, 0, 0.5);
   }
 
   #score {
     position: absolute;
-    top: 15px;
-    font-size: 30px;
-    letter-spacing: 2px;
-    text-shadow: 2px 2px 6px #0008;
-    user-select: none;
+    top: 20px;
+    font-size: 32px;
+    text-shadow: 2px 2px 8px #000;
   }
 
   #message {
@@ -48,20 +44,18 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 24px;
+    font-size: 28px;
     text-align: center;
-    color: #fff;
-    text-shadow: 2px 2px 6px #000c;
-    user-select: none;
-    pointer-events: none;
+    text-shadow: 3px 3px 10px #000;
     white-space: pre;
+    line-height: 1.5;
   }
 </style>
 </head>
 <body>
-<div id="score">Targets Hit: 0</div>
-<div id="message">Press Space to Shoot</div>
-<canvas id="game" width="400" height="600"></canvas>
+<div id="score">Score: 0</div>
+<div id="message">Press Space to Begin</div>
+<canvas id="game" width="450" height="600"></canvas>
 <script>
 (() => {
   const canvas = document.getElementById('game');
@@ -74,68 +68,92 @@
   
   const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
 
-  // --- NEW SOUNDS ---
+  // --- SOUNDS ---
   const sounds = {
     thrust: new Audio('https://freesound.org/data/previews/341/341695_62469-lq.mp3'),
-    hit: new Audio('https://freesound.org/data/previews/253/253174_4103908-lq.mp3'), // Impact sound
+    hit: new Audio('https://freesound.org/data/previews/253/253174_4103908-lq.mp3'),
     gunshot: new Audio('https://freesound.org/data/previews/58/58245_599498-lq.mp3'),
-    fail: new Audio('https://freesound.org/data/previews/173/173859_2193233-lq.mp3') // Fail sound
+    fail: new Audio('https://freesound.org/data/previews/173/173859_2193233-lq.mp3')
   };
-
-  sounds.thrust.volume = 0.15;
+  Object.values(sounds).forEach(sound => sound.volume = 0.3);
   sounds.hit.volume = 0.4;
-  sounds.gunshot.volume = 0.3;
-  sounds.fail.volume = 0.3;
+
+  // --- GAME STATE & VISUALS ---
+  let score, frames, gameState, animationFrame;
+  let spawnInterval, spawnTimer;
+  let screenShake = 0;
+
+  // --- DYNAMIC BACKGROUND ---
+  let backgroundStars = [];
+  function initBackground() {
+      for (let i = 0; i < 100; i++) {
+          backgroundStars.push({
+              x: Math.random() * WIDTH,
+              y: Math.random() * HEIGHT,
+              radius: Math.random() * 1.5,
+              alpha: Math.random() * 0.5 + 0.2
+          });
+      }
+  }
+
+  function drawBackground() {
+      ctx.fillStyle = '#FFF';
+      backgroundStars.forEach(star => {
+          star.x -= 0.2;
+          if (star.x < 0) star.x = WIDTH;
+          
+          ctx.beginPath();
+          ctx.globalAlpha = star.alpha;
+          ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+          ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+  }
 
   // --- BULLET (Player) ---
   const bullet = {
-    startX: 90,
-    x: -30,
-    y: HEIGHT / 2,
-    width: 35,
-    height: 12,
-    gravity: 0.35,
-    lift: -7,
-    velocity: 0,
-    rotation: 0,
-    targetRotation: 0,
+    startX: 100, x: -40, y: HEIGHT / 2,
+    width: 35, height: 12,
+    gravity: 0.3, lift: -6.5, velocity: 0,
+    rotation: 0, targetRotation: 0,
     applyThrust() {
       this.velocity = this.lift;
-      sounds.thrust.currentTime = 0;
-      sounds.thrust.play();
+      sounds.thrust.currentTime = 0; sounds.thrust.play();
     },
     update() {
       this.velocity += this.gravity;
       this.y += this.velocity;
       
-      this.targetRotation = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, this.velocity * 0.05));
-      this.rotation = lerp(this.rotation, this.targetRotation, 0.1);
+      this.targetRotation = Math.max(-Math.PI / 6, Math.min(Math.PI / 6, this.velocity * 0.06));
+      this.rotation = lerp(this.rotation, this.targetRotation, 0.15);
 
-      if (this.y + this.height > HEIGHT || this.y < 0) {
+      if (this.y < 0 || this.y + this.height > HEIGHT) {
         sounds.fail.play();
         gameState = 'gameover';
-        messageEl.textContent = 'Out of Bounds\nPress Space to Restart';
+        messageEl.textContent = 'Out of Bounds!\nPress Space to Restart';
         messageEl.style.display = 'block';
+        screenShake = 10;
       }
     },
     draw() {
       ctx.save();
       ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
       ctx.rotate(this.rotation);
-      ctx.translate(-(this.x + this.width / 2), -(this.y + this.height / 2));
+      ctx.shadowColor = 'yellow';
+      ctx.shadowBlur = 10;
 
-      const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
+      const grad = ctx.createLinearGradient(-this.width/2, -this.height/2, -this.width/2, this.height);
       grad.addColorStop(0, '#fefefe');
       grad.addColorStop(0.5, '#d4af37');
       grad.addColorStop(1, '#b8860b');
       ctx.fillStyle = grad;
 
       ctx.beginPath();
-      ctx.moveTo(this.x, this.y);
-      ctx.lineTo(this.x + this.width - 5, this.y);
-      ctx.lineTo(this.x + this.width, this.y + this.height / 2);
-      ctx.lineTo(this.x + this.width - 5, this.y + this.height);
-      ctx.lineTo(this.x, this.y + this.height);
+      ctx.moveTo(-this.width/2, -this.height/2);
+      ctx.lineTo(this.width/2 - 5, -this.height/2);
+      ctx.lineTo(this.width/2, 0);
+      ctx.lineTo(this.width/2 - 5, this.height/2);
+      ctx.lineTo(-this.width/2, this.height/2);
       ctx.closePath();
       ctx.fill();
 
@@ -143,91 +161,95 @@
     }
   };
   
-  // --- GUN ANIMATION (FIXED BARREL POSITION) ---
+  // --- UPGRADED GUN ---
   const gun = {
-    x: 0,
-    width: 110,
-    height: 60,
-    recoil: 0,
-    flashOpacity: 0,
-    barrelOffsetY: 18, // The vertical center of the barrel relative to gun's top
-    get y() {
-      return bullet.y - this.barrelOffsetY - bullet.height/2;
+    x: 0, y: 0, targetY: 0,
+    width: 110, height: 60, barrelOffsetY: 23,
+    recoil: 0, flashOpacity: 0,
+    update() {
+        this.targetY = bullet.y - (this.height / 2) + (bullet.height / 2);
+        this.y = lerp(this.y, this.targetY, 0.2); // Smooth follow
+        this.recoil = lerp(this.recoil, 0, 0.15); // Smooth recoil return
     },
     draw() {
-      const gunY = this.y;
       const gunX = this.x - this.recoil;
       
       if(this.flashOpacity > 0) {
+        this.flashOpacity -= 0.1;
         ctx.fillStyle = `rgba(255, 223, 0, ${this.flashOpacity})`;
+        const flashX = gunX + this.width - 10;
+        const flashY = this.y + this.barrelOffsetY;
         ctx.beginPath();
-        const flashX = gunX + this.width - 15;
-        const flashY = gunY + this.barrelOffsetY + 5;
-        ctx.moveTo(flashX, flashY);
-        for(let i = 0; i < 8; i++) {
-          const angle = i * Math.PI / 4 + Math.random() * 0.2;
-          const length = (i % 2 === 0) ? 45 : 22;
-          ctx.lineTo(flashX + Math.cos(angle) * length, flashY + Math.sin(angle) * length);
-        }
-        ctx.closePath();
+        ctx.arc(flashX, flashY, 25 * this.flashOpacity, 0, Math.PI * 2);
         ctx.fill();
       }
       
+      // Grip
       ctx.fillStyle = '#212529';
       ctx.beginPath();
-      ctx.moveTo(gunX + 20, gunY + 30);
-      ctx.lineTo(gunX + 15, gunY + 58);
-      ctx.lineTo(gunX + 45, gunY + 58);
-      ctx.lineTo(gunX + 40, gunY + 30);
-      ctx.closePath();
-      ctx.fill();
+      ctx.moveTo(gunX + 20, this.y + 30); ctx.lineTo(gunX + 15, this.y + 58);
+      ctx.lineTo(gunX + 45, this.y + 58); ctx.lineTo(gunX + 40, this.y + 30);
+      ctx.closePath(); ctx.fill();
       
+      // Main Body (Slide)
       ctx.fillStyle = '#343a40';
-      ctx.fillRect(gunX, gunY, this.width - 10, 32);
-      
-      ctx.fillStyle = '#495057';
-      ctx.fillRect(gunX, gunY + this.barrelOffsetY, this.width, 10);
+      ctx.fillRect(gunX, this.y, this.width - 10, 32);
+      // Barrel
+      const barrelGrad = ctx.createLinearGradient(gunX,0,gunX+this.width,0);
+      barrelGrad.addColorStop(0.7, '#495057');
+      barrelGrad.addColorStop(1, '#6c757d');
+      ctx.fillStyle = barrelGrad;
+      ctx.fillRect(gunX, this.y + this.barrelOffsetY - 5, this.width, 10);
     }
   };
 
-  // --- TARGETS (PEOPLE SILHOUETTES) ---
-  const targetWidth = 30;
-  const targetHeight = 60;
-  const targetSpeed = 3;
+  // --- TARGET BOARDS ---
   let targets = [];
+  const targetRadius = 35;
+  const targetSpeed = 3.5;
 
   function createTarget() {
-    const yPos = Math.random() * (HEIGHT - targetHeight - 40) + 20; // 20px padding
-    targets.push({
-      x: WIDTH,
-      y: yPos,
-      width: targetWidth,
-      height: targetHeight,
-    });
+    const yPos = Math.random() * (HEIGHT - targetRadius * 2) + targetRadius;
+    targets.push({ x: WIDTH + targetRadius, y: yPos, radius: targetRadius });
   }
 
   function drawTarget(t) {
-    ctx.fillStyle = '#f0f0f0'; // Light grey silhouette
-    // Body
-    ctx.fillRect(t.x, t.y + 15, t.width, t.height - 15);
-    // Head
-    ctx.beginPath();
-    ctx.arc(t.x + t.width / 2, t.y + 15, t.width / 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+
+    // Outer Ring
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(0, 0, t.radius, 0, Math.PI * 2); ctx.fill();
+    // Second Ring
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.8, 0, Math.PI * 2); ctx.fill();
+    // Third Ring
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.6, 0, Math.PI * 2); ctx.fill();
+    // Bullseye
+    ctx.fillStyle = '#d90429';
+    ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.3, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
   }
 
-  // --- HIT EFFECT (RED PARTICLES) ---
+  // --- PARTICLE SYSTEMS ---
   let particles = [];
-  function createHitEffect(x, y) {
-    for (let i = 0; i < 30; i++) {
+  function createParticles(x, y, count, color, power) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * power;
       particles.push({
-        x: x,
-        y: y,
-        vx: (Math.random() - 0.5) * 10,
-        vy: (Math.random() - 0.5) * 10,
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
         alpha: 1,
         size: Math.random() * 3 + 1,
-        color: `hsl(${Math.random() * 20}, 100%, 50%)` // Hues of red/orange
+        color: color
       });
     }
   }
@@ -235,125 +257,129 @@
   function updateAndDrawParticles() {
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.alpha -= 0.04;
-
-      if (p.alpha <= 0) {
-        particles.splice(i, 1);
-      } else {
-        ctx.fillStyle = `rgba(255, 0, 0, ${p.alpha})`;
+      p.x += p.vx; p.y += p.vy;
+      p.alpha -= 0.03;
+      if (p.alpha <= 0) particles.splice(i, 1);
+      else {
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
         ctx.fillRect(p.x, p.y, p.size, p.size);
+        ctx.globalAlpha = 1;
       }
     }
   }
 
-  // --- GAME STATE & LOOP ---
-  let score = 0;
-  let frames = 0;
-  let gameState = 'start';
-  let animationFrame = 0;
-
+  // --- GAME MANAGEMENT ---
   function resetGame() {
-    targets = [];
-    particles = [];
-    score = 0;
-    frames = 0;
-    bullet.y = HEIGHT / 2;
-    bullet.velocity = 0;
-    bullet.rotation = 0;
-    bullet.x = -bullet.width;
+    targets = []; particles = [];
+    score = 0; frames = 0;
+    spawnInterval = 100; // Start with slower spawns
+    spawnTimer = spawnInterval;
+    bullet.y = HEIGHT / 2; bullet.velocity = 0; bullet.rotation = 0;
+    bullet.x = -bullet.width; gun.y = bullet.y;
     gameState = 'start';
-    scoreEl.textContent = 'Targets Hit: 0';
-    messageEl.textContent = 'Press Space to Shoot';
+    scoreEl.textContent = 'Score: 0';
+    messageEl.textContent = 'Press Space to Begin';
     messageEl.style.display = 'block';
   }
 
-  function checkCollision(a, b) {
-    return (
-      a.x < b.x + b.width &&
-      a.x + a.width > b.x &&
-      a.y < b.y + b.height &&
-      a.y + a.height > b.y
-    );
+  function checkCollision(bull, targ) {
+    const dx = bull.x + bull.width/2 - targ.x;
+    const dy = bull.y + bull.height/2 - targ.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    return distance < targ.radius;
   }
 
   function update() {
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
     
-    for (let t of targets) {
-      drawTarget(t);
+    // Apply screen shake
+    ctx.save();
+    if(screenShake > 0) {
+        ctx.translate(Math.random() * screenShake - screenShake / 2, Math.random() * screenShake - screenShake / 2);
+        screenShake *= 0.9;
     }
+
+    drawBackground();
+    
+    targets.forEach(drawTarget);
     updateAndDrawParticles();
 
     if (gameState === 'start') {
+      gun.update();
       gun.draw();
       messageEl.style.display = 'block';
     } else if (gameState === 'shooting') {
         messageEl.style.display = 'none';
         animationFrame++;
         
-        gun.recoil = Math.sin(animationFrame * Math.PI / 30) * 20;
-        gun.flashOpacity = Math.max(0, 1 - animationFrame / 15);
         bullet.x = lerp(-bullet.width, bullet.startX, animationFrame / 30);
-        bullet.y = gun.y + gun.barrelOffsetY;
-
+        gun.update();
         gun.draw();
         bullet.draw();
 
         if (animationFrame > 30) {
             gameState = 'playing';
             bullet.x = bullet.startX;
-            gun.recoil = 0;
-            gun.flashOpacity = 0;
         }
-
     } else if (gameState === 'playing') {
       messageEl.style.display = 'none';
 
+      gun.update(); // Gun still visible and follows
+      gun.draw();
       bullet.update();
       bullet.draw();
 
-      if (frames % 60 === 0) { // Spawn a new target every second
-        createTarget();
+      spawnTimer--;
+      if (spawnTimer <= 0) {
+          createTarget();
+          // Increase difficulty
+          spawnInterval = Math.max(40, 100 - score * 2);
+          spawnTimer = spawnInterval;
       }
 
-      // Iterate backwards to safely remove items
       for (let i = targets.length - 1; i >= 0; i--) {
         const t = targets[i];
         t.x -= targetSpeed;
 
         if (checkCollision(bullet, t)) {
           sounds.hit.play();
-          createHitEffect(t.x + t.width / 2, t.y + t.height / 2);
+          createParticles(t.x, t.y, 50, '#ffc300', 8); // Hit sparks
           score++;
-          scoreEl.textContent = `Targets Hit: ${score}`;
-          targets.splice(i, 1); // Remove hit target
-          continue; // Skip to next target
+          scoreEl.textContent = `Score: ${score}`;
+          targets.splice(i, 1);
+          screenShake = 5;
+          continue;
         }
         
-        // GAME OVER: Target escaped
-        if (t.x + t.width < 0) {
+        if (t.x + t.radius < 0) {
           sounds.fail.play();
           gameState = 'gameover';
-          messageEl.textContent = 'Target Escaped!\nPress Space to Restart';
+          messageEl.textContent = 'Target Missed!\nPress Space to Restart';
           messageEl.style.display = 'block';
+          screenShake = 10;
         }
       }
     } else if (gameState === 'gameover') {
-      // Game over, do nothing
+        gun.update();
+        gun.draw();
+        targets.forEach(drawTarget);
     }
 
     frames++;
+    ctx.restore(); // End screen shake
     requestAnimationFrame(update);
   }
 
   function handleInput() {
     if (gameState === 'start') {
-      sounds.gunshot.currentTime = 0;
       sounds.gunshot.play();
       gameState = 'shooting';
       animationFrame = 0;
+      gun.recoil = 25;
+      gun.flashOpacity = 1;
+      screenShake = 10;
+      createParticles(gun.x + gun.width, gun.y + gun.barrelOffsetY, 30, '#ffc300', 12);
     } else if (gameState === 'playing') {
       bullet.applyThrust();
     } else if (gameState === 'gameover') {
@@ -367,8 +393,9 @@
       handleInput();
     }
   });
-  window.addEventListener('mousedown', () => handleInput());
-
+  window.addEventListener('mousedown', handleInput);
+  
+  initBackground();
   resetGame();
   update();
 })();
