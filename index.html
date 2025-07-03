@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Bullet Break: Shatterpoint</title>
+<title>Bullet Break: Crowd Control</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -13,7 +13,7 @@
 
   body {
     margin: 0;
-    background: linear-gradient(to bottom, #141e30 0%, #243b55 100%);
+    background: linear-gradient(to bottom, #2c3e50 0%, #000000 100%); /* Darker, grittier */
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -25,7 +25,7 @@
   }
 
   canvas {
-    background: rgba(10, 10, 20, 0.4); /* Darker, more serious background */
+    background: rgba(10, 10, 20, 0.4);
     display: block;
     border: 3px solid rgba(255, 255, 255, 0.4);
     border-radius: 15px;
@@ -37,7 +37,7 @@
   #score {
     position: absolute;
     top: 15px;
-    font-size: 40px;
+    font-size: 30px;
     letter-spacing: 2px;
     text-shadow: 2px 2px 6px #0008;
     user-select: none;
@@ -59,7 +59,7 @@
 </style>
 </head>
 <body>
-<div id="score">0</div>
+<div id="score">Targets Hit: 0</div>
 <div id="message">Press Space to Shoot</div>
 <canvas id="game" width="400" height="600"></canvas>
 <script>
@@ -72,23 +72,22 @@
   const WIDTH = canvas.width;
   const HEIGHT = canvas.height;
   
-  // --- HELPER FUNCTION FOR SMOOTHING ---
   const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
 
-  // --- SOUNDS ---
+  // --- NEW SOUNDS ---
   const sounds = {
     thrust: new Audio('https://freesound.org/data/previews/341/341695_62469-lq.mp3'),
-    hit: new Audio('https://freesound.org/data/previews/23/23389_133742-lq.mp3'),
-    point: new Audio('https://freesound.org/data/previews/43/43132_359333-lq.mp3'),
-    gunshot: new Audio('https://freesound.org/data/previews/58/58245_599498-lq.mp3')
+    hit: new Audio('https://freesound.org/data/previews/253/253174_4103908-lq.mp3'), // Impact sound
+    gunshot: new Audio('https://freesound.org/data/previews/58/58245_599498-lq.mp3'),
+    fail: new Audio('https://freesound.org/data/previews/173/173859_2193233-lq.mp3') // Fail sound
   };
 
   sounds.thrust.volume = 0.15;
-  sounds.hit.volume = 0.5;
-  sounds.point.volume = 0.2;
+  sounds.hit.volume = 0.4;
   sounds.gunshot.volume = 0.3;
+  sounds.fail.volume = 0.3;
 
-  // --- IMPROVED BULLET ---
+  // --- BULLET (Player) ---
   const bullet = {
     startX: 90,
     x: -30,
@@ -109,18 +108,14 @@
       this.velocity += this.gravity;
       this.y += this.velocity;
       
-      // Calculate target rotation based on velocity (tilts up/down)
       this.targetRotation = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, this.velocity * 0.05));
-      // Smoothly interpolate to the target rotation
       this.rotation = lerp(this.rotation, this.targetRotation, 0.1);
 
-      if (this.y + this.height > HEIGHT) {
-        this.y = HEIGHT - this.height;
-        this.velocity = 0;
-      }
-      if (this.y < 0) {
-        this.y = 0;
-        this.velocity = 0;
+      if (this.y + this.height > HEIGHT || this.y < 0) {
+        sounds.fail.play();
+        gameState = 'gameover';
+        messageEl.textContent = 'Out of Bounds\nPress Space to Restart';
+        messageEl.style.display = 'block';
       }
     },
     draw() {
@@ -129,16 +124,6 @@
       ctx.rotate(this.rotation);
       ctx.translate(-(this.x + this.width / 2), -(this.y + this.height / 2));
 
-      // Speed trail
-      ctx.fillStyle = 'rgba(255, 223, 0, 0.3)';
-      ctx.beginPath();
-      ctx.moveTo(this.x - 10, this.y + this.height / 2 - 2);
-      ctx.lineTo(this.x, this.y + this.height / 2);
-      ctx.lineTo(this.x - 10, this.y + this.height / 2 + 2);
-      ctx.closePath();
-      ctx.fill();
-      
-      // Bullet body with gradient for metallic look
       const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
       grad.addColorStop(0, '#fefefe');
       grad.addColorStop(0.5, '#d4af37');
@@ -154,31 +139,30 @@
       ctx.closePath();
       ctx.fill();
 
-      // Highlight
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillRect(this.x + 5, this.y + 2, this.width - 15, 2);
-
       ctx.restore();
     }
   };
   
-  // --- IMPROVED GUN ---
+  // --- GUN ANIMATION (FIXED BARREL POSITION) ---
   const gun = {
     x: 0,
-    y: 0,
     width: 110,
     height: 60,
     recoil: 0,
     flashOpacity: 0,
+    barrelOffsetY: 18, // The vertical center of the barrel relative to gun's top
+    get y() {
+      return bullet.y - this.barrelOffsetY - bullet.height/2;
+    },
     draw() {
-      const gunY = bullet.y - (this.height - bullet.height) / 2 - 10;
+      const gunY = this.y;
       const gunX = this.x - this.recoil;
       
       if(this.flashOpacity > 0) {
         ctx.fillStyle = `rgba(255, 223, 0, ${this.flashOpacity})`;
         ctx.beginPath();
         const flashX = gunX + this.width - 15;
-        const flashY = gunY + 18;
+        const flashY = gunY + this.barrelOffsetY + 5;
         ctx.moveTo(flashX, flashY);
         for(let i = 0; i < 8; i++) {
           const angle = i * Math.PI / 4 + Math.random() * 0.2;
@@ -189,7 +173,6 @@
         ctx.fill();
       }
       
-      // Grip
       ctx.fillStyle = '#212529';
       ctx.beginPath();
       ctx.moveTo(gunX + 20, gunY + 30);
@@ -199,87 +182,52 @@
       ctx.closePath();
       ctx.fill();
       
-      // Main Body (Slide)
       ctx.fillStyle = '#343a40';
       ctx.fillRect(gunX, gunY, this.width - 10, 32);
       
-      // Barrel
       ctx.fillStyle = '#495057';
-      ctx.fillRect(gunX, gunY + 12, this.width, 10);
+      ctx.fillRect(gunX, gunY + this.barrelOffsetY, this.width, 10);
     }
   };
 
-  // --- GLASS PANEL OBSTACLES ---
-  const panelWidth = 90;
-  const panelGap = 160;
-  const panelSpeed = 2.5;
-  let panels = [];
+  // --- TARGETS (PEOPLE SILHOUETTES) ---
+  const targetWidth = 30;
+  const targetHeight = 60;
+  const targetSpeed = 3;
+  let targets = [];
 
-  function createPanel() {
-    const minHeight = 60;
-    const maxHeight = HEIGHT - panelGap - 60;
-    const topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
-    const bottomHeight = HEIGHT - (topHeight + panelGap);
-
-    const generateJaggedPoints = (numPoints, maxOffset) => {
-      let points = [];
-      for (let i = 0; i <= numPoints; i++) {
-        points.push({
-          x: (panelWidth / numPoints) * i,
-          y: Math.random() * maxOffset
-        });
-      }
-      return points;
-    };
-
-    panels.push({
+  function createTarget() {
+    const yPos = Math.random() * (HEIGHT - targetHeight - 40) + 20; // 20px padding
+    targets.push({
       x: WIDTH,
-      topHeight: topHeight,
-      bottomY: topHeight + panelGap,
-      bottomHeight: bottomHeight,
-      passed: false,
-      jaggedPoints: generateJaggedPoints(8, 20)
+      y: yPos,
+      width: targetWidth,
+      height: targetHeight,
     });
   }
 
-  function drawPanel(p) {
-    ctx.fillStyle = 'rgba(173, 216, 230, 0.35)';
-    ctx.strokeStyle = 'rgba(220, 240, 255, 0.6)';
-    ctx.lineWidth = 2;
-
-    // Top Panel
+  function drawTarget(t) {
+    ctx.fillStyle = '#f0f0f0'; // Light grey silhouette
+    // Body
+    ctx.fillRect(t.x, t.y + 15, t.width, t.height - 15);
+    // Head
     ctx.beginPath();
-    ctx.moveTo(p.x, 0);
-    ctx.lineTo(p.x + panelWidth, 0);
-    ctx.lineTo(p.x + panelWidth, p.topHeight);
-    p.jaggedPoints.forEach(point => ctx.lineTo(p.x + point.x, p.topHeight - point.y));
-    ctx.closePath();
+    ctx.arc(t.x + t.width / 2, t.y + 15, t.width / 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
-
-    // Bottom Panel
-    ctx.beginPath();
-    ctx.moveTo(p.x, HEIGHT);
-    ctx.lineTo(p.x + panelWidth, HEIGHT);
-    ctx.lineTo(p.x + panelWidth, p.bottomY);
-    p.jaggedPoints.slice().reverse().forEach(point => ctx.lineTo(p.x + point.x, p.bottomY + point.y));
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
   }
 
-  // --- SHATTER EFFECT ---
+  // --- HIT EFFECT (RED PARTICLES) ---
   let particles = [];
-  function createShatterEffect(x, y) {
-    for (let i = 0; i < 40; i++) {
+  function createHitEffect(x, y) {
+    for (let i = 0; i < 30; i++) {
       particles.push({
         x: x,
         y: y,
-        vx: (Math.random() - 0.5) * 8,
-        vy: (Math.random() - 0.5) * 8,
+        vx: (Math.random() - 0.5) * 10,
+        vy: (Math.random() - 0.5) * 10,
         alpha: 1,
-        size: Math.random() * 4 + 1,
-        gravity: 0.2
+        size: Math.random() * 3 + 1,
+        color: `hsl(${Math.random() * 20}, 100%, 50%)` // Hues of red/orange
       });
     }
   }
@@ -287,16 +235,14 @@
   function updateAndDrawParticles() {
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-      p.vx *= 0.98;
-      p.vy += p.gravity;
       p.x += p.vx;
       p.y += p.vy;
-      p.alpha -= 0.02;
+      p.alpha -= 0.04;
 
       if (p.alpha <= 0) {
         particles.splice(i, 1);
       } else {
-        ctx.fillStyle = `rgba(220, 240, 255, ${p.alpha})`;
+        ctx.fillStyle = `rgba(255, 0, 0, ${p.alpha})`;
         ctx.fillRect(p.x, p.y, p.size, p.size);
       }
     }
@@ -309,7 +255,7 @@
   let animationFrame = 0;
 
   function resetGame() {
-    panels = [];
+    targets = [];
     particles = [];
     score = 0;
     frames = 0;
@@ -318,36 +264,30 @@
     bullet.rotation = 0;
     bullet.x = -bullet.width;
     gameState = 'start';
-    scoreEl.textContent = '0';
+    scoreEl.textContent = 'Targets Hit: 0';
     messageEl.textContent = 'Press Space to Shoot';
     messageEl.style.display = 'block';
   }
 
-  function collision(p) {
-      const bx = bullet.x;
-      const by = bullet.y;
-      const bw = bullet.width;
-      const bh = bullet.height;
-
-      if (bx + bw > p.x && bx < p.x + panelWidth) {
-          if (by < p.topHeight || by + bh > p.bottomY) {
-              return true;
-          }
-      }
-      return false;
+  function checkCollision(a, b) {
+    return (
+      a.x < b.x + b.width &&
+      a.x + a.width > b.x &&
+      a.y < b.y + b.height &&
+      a.y + a.height > b.y
+    );
   }
 
   function update() {
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
     
-    for (let p of panels) {
-      drawPanel(p);
+    for (let t of targets) {
+      drawTarget(t);
     }
     updateAndDrawParticles();
 
     if (gameState === 'start') {
       gun.draw();
-      bullet.y = HEIGHT / 2;
       messageEl.style.display = 'block';
     } else if (gameState === 'shooting') {
         messageEl.style.display = 'none';
@@ -355,7 +295,8 @@
         
         gun.recoil = Math.sin(animationFrame * Math.PI / 30) * 20;
         gun.flashOpacity = Math.max(0, 1 - animationFrame / 15);
-        bullet.x = (bullet.startX + bullet.width) * (animationFrame / 30) - bullet.width;
+        bullet.x = lerp(-bullet.width, bullet.startX, animationFrame / 30);
+        bullet.y = gun.y + gun.barrelOffsetY;
 
         gun.draw();
         bullet.draw();
@@ -373,37 +314,40 @@
       bullet.update();
       bullet.draw();
 
-      if (frames % 80 === 0) {
-        createPanel();
+      if (frames % 60 === 0) { // Spawn a new target every second
+        createTarget();
       }
 
-      for (let p of panels) {
-        p.x -= panelSpeed;
-        if (collision(p)) {
+      // Iterate backwards to safely remove items
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        t.x -= targetSpeed;
+
+        if (checkCollision(bullet, t)) {
           sounds.hit.play();
-          createShatterEffect(bullet.x + bullet.width / 2, bullet.y + bullet.height / 2);
+          createHitEffect(t.x + t.width / 2, t.y + t.height / 2);
+          score++;
+          scoreEl.textContent = `Targets Hit: ${score}`;
+          targets.splice(i, 1); // Remove hit target
+          continue; // Skip to next target
+        }
+        
+        // GAME OVER: Target escaped
+        if (t.x + t.width < 0) {
+          sounds.fail.play();
           gameState = 'gameover';
-          messageEl.textContent = 'Shattered\nPress Space to Restart';
+          messageEl.textContent = 'Target Escaped!\nPress Space to Restart';
           messageEl.style.display = 'block';
         }
-        if (!p.passed && p.x + panelWidth < bullet.x) {
-          score++;
-          p.passed = true;
-          scoreEl.textContent = score;
-          sounds.point.play();
-        }
       }
-      panels = panels.filter(p => p.x + panelWidth > 0);
-
     } else if (gameState === 'gameover') {
-      // Don't draw the bullet, it has shattered
+      // Game over, do nothing
     }
 
     frames++;
     requestAnimationFrame(update);
   }
 
-  // --- CONTROLS ---
   function handleInput() {
     if (gameState === 'start') {
       sounds.gunshot.currentTime = 0;
