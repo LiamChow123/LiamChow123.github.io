@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Crowd Control: Polished Edition</title>
+<title>Crowd Control: Definitive Edition</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -11,7 +11,7 @@
 
   body {
     margin: 0;
-    background: #111;
+    background: radial-gradient(circle, #333, #111);
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -23,20 +23,23 @@
   }
 
   canvas {
-    background: linear-gradient(to bottom, #2c3e50 0%, #000000 100%);
+    background: linear-gradient(to bottom, #141e30 0%, #000000 100%);
     display: block;
-    border: 3px solid rgba(255, 255, 255, 0.5);
+    border: 3px solid rgba(0, 191, 255, 0.6);
     border-radius: 5px;
     box-shadow:
-      0 0 30px rgba(0, 191, 255, 0.4),
-      inset 0 0 20px rgba(0, 0, 0, 0.5);
+      0 0 40px rgba(0, 191, 255, 0.5),
+      inset 0 0 25px rgba(0, 0, 0, 0.6);
+  }
+
+  #score, #message {
+    text-shadow: 4px 4px 0px #000;
   }
 
   #score {
     position: absolute;
     top: 20px;
     font-size: 32px;
-    text-shadow: 2px 2px 8px #000;
   }
 
   #message {
@@ -46,7 +49,6 @@
     transform: translate(-50%, -50%);
     font-size: 28px;
     text-align: center;
-    text-shadow: 3px 3px 10px #000;
     white-space: pre;
     line-height: 1.5;
   }
@@ -76,43 +78,61 @@
     fail: new Audio('https://freesound.org/data/previews/173/173859_2193233-lq.mp3')
   };
   Object.values(sounds).forEach(sound => sound.volume = 0.3);
-  sounds.hit.volume = 0.4;
+  sounds.hit.volume = 0.5;
 
   // --- GAME STATE & VISUALS ---
   let score, frames, gameState, animationFrame;
   let spawnInterval, spawnTimer;
   let screenShake = 0;
 
-  // --- DYNAMIC BACKGROUND ---
+  // --- DYNAMIC BACKGROUND & FOREGROUND ---
   let backgroundStars = [];
-  function initBackground() {
-      for (let i = 0; i < 100; i++) {
+  let cityscape = [];
+  function initScenery() {
+      backgroundStars = []; cityscape = [];
+      for (let i = 0; i < 150; i++) {
           backgroundStars.push({
-              x: Math.random() * WIDTH,
-              y: Math.random() * HEIGHT,
-              radius: Math.random() * 1.5,
-              alpha: Math.random() * 0.5 + 0.2
+              x: Math.random() * WIDTH, y: Math.random() * HEIGHT,
+              radius: Math.random() * 1.5, alpha: Math.random() * 0.7 + 0.2
+          });
+      }
+      for (let i = 0; i < 20; i++) {
+          cityscape.push({
+              x: i * 30,
+              w: Math.random() * 40 + 20,
+              h: Math.random() * 80 + 20,
+              speed: Math.random() * 0.2 + 0.1
           });
       }
   }
 
-  function drawBackground() {
+  function drawScenery() {
+      // Stars
       ctx.fillStyle = '#FFF';
       backgroundStars.forEach(star => {
-          star.x -= 0.2;
+          star.x -= 0.1;
           if (star.x < 0) star.x = WIDTH;
-          
-          ctx.beginPath();
           ctx.globalAlpha = star.alpha;
-          ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2); ctx.fill();
+      });
+
+      // Cityscape Parallax
+      const cityGrad = ctx.createLinearGradient(0, HEIGHT, 0, HEIGHT - 100);
+      cityGrad.addColorStop(0, '#111');
+      cityGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = cityGrad;
+      cityscape.forEach(building => {
+          building.x -= building.speed;
+          if(building.x + building.w < 0) building.x = WIDTH;
+          ctx.globalAlpha = 0.8;
+          ctx.fillRect(building.x, HEIGHT - building.h, building.w, building.h);
       });
       ctx.globalAlpha = 1;
   }
-
+  
   // --- BULLET (Player) ---
   const bullet = {
-    startX: 100, x: -40, y: HEIGHT / 2,
+    startX: 100, x: -40, y: HEIGHT / 2, visible: false,
     width: 35, height: 12,
     gravity: 0.3, lift: -6.5, velocity: 0,
     rotation: 0, targetRotation: 0,
@@ -121,6 +141,7 @@
       sounds.thrust.currentTime = 0; sounds.thrust.play();
     },
     update() {
+      if(!this.visible) return;
       this.velocity += this.gravity;
       this.y += this.velocity;
       
@@ -132,31 +153,27 @@
         gameState = 'gameover';
         messageEl.textContent = 'Out of Bounds!\nPress Space to Restart';
         messageEl.style.display = 'block';
-        screenShake = 10;
+        screenShake = 15;
+        this.visible = false;
       }
     },
     draw() {
+      if (!this.visible) return;
       ctx.save();
       ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
       ctx.rotate(this.rotation);
-      ctx.shadowColor = 'yellow';
-      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#fefae0';
+      ctx.shadowBlur = 15;
 
-      const grad = ctx.createLinearGradient(-this.width/2, -this.height/2, -this.width/2, this.height);
-      grad.addColorStop(0, '#fefefe');
-      grad.addColorStop(0.5, '#d4af37');
-      grad.addColorStop(1, '#b8860b');
+      const grad = ctx.createLinearGradient(0, -this.height/2, 0, this.height);
+      grad.addColorStop(0, '#fefefe'); grad.addColorStop(0.5, '#d4af37'); grad.addColorStop(1, '#b8860b');
       ctx.fillStyle = grad;
 
       ctx.beginPath();
-      ctx.moveTo(-this.width/2, -this.height/2);
-      ctx.lineTo(this.width/2 - 5, -this.height/2);
-      ctx.lineTo(this.width/2, 0);
-      ctx.lineTo(this.width/2 - 5, this.height/2);
-      ctx.lineTo(-this.width/2, this.height/2);
-      ctx.closePath();
+      ctx.moveTo(-this.width/2, -this.height/2); ctx.lineTo(this.width/2 - 5, -this.height/2);
+      ctx.lineTo(this.width/2, 0); ctx.lineTo(this.width/2 - 5, this.height/2);
+      ctx.lineTo(-this.width/2, this.height/2); ctx.closePath();
       ctx.fill();
-
       ctx.restore();
     }
   };
@@ -164,40 +181,39 @@
   // --- UPGRADED GUN ---
   const gun = {
     x: 0, y: 0, targetY: 0,
-    width: 110, height: 60, barrelOffsetY: 23,
+    width: 110, height: 60, barrelOffsetY: 23, barrelTipX: 0,
     recoil: 0, flashOpacity: 0,
     update() {
         this.targetY = bullet.y - (this.height / 2) + (bullet.height / 2);
-        this.y = lerp(this.y, this.targetY, 0.2); // Smooth follow
-        this.recoil = lerp(this.recoil, 0, 0.15); // Smooth recoil return
+        this.y = lerp(this.y, this.targetY, 0.1);
+        this.recoil = lerp(this.recoil, 0, 0.15);
+        this.barrelTipX = this.x - this.recoil + this.width - 10;
     },
     draw() {
       const gunX = this.x - this.recoil;
       
       if(this.flashOpacity > 0) {
         this.flashOpacity -= 0.1;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter'; // GLOW EFFECT
         ctx.fillStyle = `rgba(255, 223, 0, ${this.flashOpacity})`;
-        const flashX = gunX + this.width - 10;
-        const flashY = this.y + this.barrelOffsetY;
         ctx.beginPath();
-        ctx.arc(flashX, flashY, 25 * this.flashOpacity, 0, Math.PI * 2);
+        ctx.arc(this.barrelTipX, this.y + this.barrelOffsetY, 30 * this.flashOpacity, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
       }
       
-      // Grip
       ctx.fillStyle = '#212529';
       ctx.beginPath();
       ctx.moveTo(gunX + 20, this.y + 30); ctx.lineTo(gunX + 15, this.y + 58);
       ctx.lineTo(gunX + 45, this.y + 58); ctx.lineTo(gunX + 40, this.y + 30);
       ctx.closePath(); ctx.fill();
       
-      // Main Body (Slide)
       ctx.fillStyle = '#343a40';
       ctx.fillRect(gunX, this.y, this.width - 10, 32);
-      // Barrel
+      
       const barrelGrad = ctx.createLinearGradient(gunX,0,gunX+this.width,0);
-      barrelGrad.addColorStop(0.7, '#495057');
-      barrelGrad.addColorStop(1, '#6c757d');
+      barrelGrad.addColorStop(0.7, '#495057'); barrelGrad.addColorStop(1, '#6c757d');
       ctx.fillStyle = barrelGrad;
       ctx.fillRect(gunX, this.y + this.barrelOffsetY - 5, this.width, 10);
     }
@@ -209,74 +225,65 @@
   const targetSpeed = 3.5;
 
   function createTarget() {
-    const yPos = Math.random() * (HEIGHT - targetRadius * 2) + targetRadius;
-    targets.push({ x: WIDTH + targetRadius, y: yPos, radius: targetRadius });
+    const yPos = Math.random() * (HEIGHT - targetRadius * 2 - 40) + targetRadius + 20;
+    targets.push({ x: WIDTH + targetRadius, y: yPos, radius: targetRadius, hitTimer: 0 });
   }
 
   function drawTarget(t) {
     ctx.save();
     ctx.translate(t.x, t.y);
-    ctx.shadowColor = '#000';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 5;
-    ctx.shadowOffsetY = 5;
+    ctx.shadowColor = '#000'; ctx.shadowBlur = 15; ctx.shadowOffsetX = 8; ctx.shadowOffsetY = 8;
 
-    // Outer Ring
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(0, 0, t.radius, 0, Math.PI * 2); ctx.fill();
-    // Second Ring
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.8, 0, Math.PI * 2); ctx.fill();
-    // Third Ring
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.6, 0, Math.PI * 2); ctx.fill();
-    // Bullseye
-    ctx.fillStyle = '#d90429';
-    ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, t.radius, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d90429'; ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.3, 0, Math.PI * 2); ctx.fill();
 
+    if(t.hitTimer > 0) { // Hit flash
+        ctx.fillStyle = `rgba(255,255,255, ${t.hitTimer/5})`;
+        ctx.beginPath(); ctx.arc(0, 0, t.radius, 0, Math.PI * 2); ctx.fill();
+        t.hitTimer--;
+    }
     ctx.restore();
   }
 
   // --- PARTICLE SYSTEMS ---
   let particles = [];
-  function createParticles(x, y, count, color, power) {
+  function createParticles(x, y, count, color, power, gravity = 0) {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * power;
       particles.push({
-        x, y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        alpha: 1,
-        size: Math.random() * 3 + 1,
-        color: color
+        x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        alpha: 1, size: Math.random() * 3 + 1, color, gravity
       });
     }
   }
 
   function updateAndDrawParticles() {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter'; // Makes particles glow
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-      p.x += p.vx; p.y += p.vy;
-      p.alpha -= 0.03;
+      p.vy += p.gravity;
+      p.x += p.vx; p.y += p.vy; p.alpha -= 0.03;
       if (p.alpha <= 0) particles.splice(i, 1);
       else {
-        ctx.globalAlpha = p.alpha;
-        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color;
         ctx.fillRect(p.x, p.y, p.size, p.size);
-        ctx.globalAlpha = 1;
       }
     }
+    ctx.restore();
   }
 
   // --- GAME MANAGEMENT ---
   function resetGame() {
     targets = []; particles = [];
     score = 0; frames = 0;
-    spawnInterval = 100; // Start with slower spawns
-    spawnTimer = spawnInterval;
+    spawnInterval = 100; spawnTimer = spawnInterval;
     bullet.y = HEIGHT / 2; bullet.velocity = 0; bullet.rotation = 0;
-    bullet.x = -bullet.width; gun.y = bullet.y;
+    bullet.x = -bullet.width; bullet.visible = false;
+    gun.y = bullet.y; gun.recoil = 0;
     gameState = 'start';
     scoreEl.textContent = 'Score: 0';
     messageEl.textContent = 'Press Space to Begin';
@@ -286,100 +293,89 @@
   function checkCollision(bull, targ) {
     const dx = bull.x + bull.width/2 - targ.x;
     const dy = bull.y + bull.height/2 - targ.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < targ.radius;
+    return Math.sqrt(dx * dx + dy * dy) < targ.radius;
   }
 
   function update() {
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
     
-    // Apply screen shake
     ctx.save();
     if(screenShake > 0) {
         ctx.translate(Math.random() * screenShake - screenShake / 2, Math.random() * screenShake - screenShake / 2);
         screenShake *= 0.9;
     }
 
-    drawBackground();
+    drawScenery();
     
+    // Update and draw targets only when not on the absolute start screen
+    if (gameState !== 'start') {
+        for (let t of targets) t.x -= targetSpeed;
+    }
     targets.forEach(drawTarget);
+    
     updateAndDrawParticles();
+    
+    gun.update();
+    bullet.update();
 
     if (gameState === 'start') {
-      gun.update();
-      gun.draw();
       messageEl.style.display = 'block';
     } else if (gameState === 'shooting') {
         messageEl.style.display = 'none';
         animationFrame++;
+        const progress = animationFrame / 20; // Faster launch
+        const easedProgress = Math.sqrt(progress);
+        bullet.x = lerp(gun.barrelTipX, bullet.startX, easedProgress);
         
-        bullet.x = lerp(-bullet.width, bullet.startX, animationFrame / 30);
-        gun.update();
-        gun.draw();
-        bullet.draw();
+        // Make bullet visible only when it exits the barrel
+        if (bullet.x > gun.barrelTipX) {
+            bullet.visible = true;
+        }
 
-        if (animationFrame > 30) {
+        if (animationFrame > 20) {
             gameState = 'playing';
             bullet.x = bullet.startX;
         }
     } else if (gameState === 'playing') {
       messageEl.style.display = 'none';
-
-      gun.update(); // Gun still visible and follows
-      gun.draw();
-      bullet.update();
-      bullet.draw();
-
       spawnTimer--;
       if (spawnTimer <= 0) {
           createTarget();
-          // Increase difficulty
           spawnInterval = Math.max(40, 100 - score * 2);
           spawnTimer = spawnInterval;
       }
-
       for (let i = targets.length - 1; i >= 0; i--) {
         const t = targets[i];
-        t.x -= targetSpeed;
-
-        if (checkCollision(bullet, t)) {
+        if (bullet.visible && checkCollision(bullet, t)) {
           sounds.hit.play();
-          createParticles(t.x, t.y, 50, '#ffc300', 8); // Hit sparks
+          createParticles(t.x, t.y, 70, '#ffc300', 8, 0.1); // Sparks with gravity
           score++;
           scoreEl.textContent = `Score: ${score}`;
-          targets.splice(i, 1);
-          screenShake = 5;
+          t.hitTimer = 5; // Start hit flash
+          setTimeout(() => targets.splice(targets.indexOf(t), 1), t.hitTimer * 16);
+          screenShake = 8;
           continue;
         }
-        
         if (t.x + t.radius < 0) {
-          sounds.fail.play();
-          gameState = 'gameover';
+          sounds.fail.play(); gameState = 'gameover';
           messageEl.textContent = 'Target Missed!\nPress Space to Restart';
-          messageEl.style.display = 'block';
-          screenShake = 10;
+          messageEl.style.display = 'block'; screenShake = 15;
         }
       }
-    } else if (gameState === 'gameover') {
-        gun.update();
-        gun.draw();
-        targets.forEach(drawTarget);
     }
 
-    frames++;
-    ctx.restore(); // End screen shake
+    gun.draw();
+    bullet.draw();
+
+    ctx.restore();
     requestAnimationFrame(update);
   }
 
   function handleInput() {
     if (gameState === 'start') {
-      sounds.gunshot.play();
-      gameState = 'shooting';
-      animationFrame = 0;
-      gun.recoil = 25;
-      gun.flashOpacity = 1;
-      screenShake = 10;
-      createParticles(gun.x + gun.width, gun.y + gun.barrelOffsetY, 30, '#ffc300', 12);
+      sounds.gunshot.play(); gameState = 'shooting'; animationFrame = 0;
+      gun.recoil = 25; gun.flashOpacity = 1; screenShake = 12;
+      createParticles(gun.barrelTipX, gun.y + gun.barrelOffsetY, 40, '#ffc300', 12);
     } else if (gameState === 'playing') {
       bullet.applyThrust();
     } else if (gameState === 'gameover') {
@@ -387,15 +383,10 @@
     }
   }
 
-  window.addEventListener('keydown', e => {
-    if (e.code === 'Space' || e.code === 'ArrowUp') {
-      e.preventDefault();
-      handleInput();
-    }
-  });
+  window.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); handleInput(); } });
   window.addEventListener('mousedown', handleInput);
   
-  initBackground();
+  initScenery();
   resetGame();
   update();
 })();
