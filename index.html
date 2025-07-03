@@ -3,46 +3,321 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bladefall</title>
-    <link rel="stylesheet" href="style.css">
-</head><body>
-    <canvas id="game-canvas"></canvas>
+    <title>osu! Aim Trainer</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a252f;
+            color: #ecf0f1;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 25px rgba(0,0,0,0.6);
+            border-radius: 8px;
+        }
+        canvas {
+            display: block;
+            background-color: #2c3e50;
+            cursor: crosshair;
+            border-radius: 8px;
+        }
+        #settings, #results-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(44, 62, 80, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+            border-radius: 8px;
+        }
+        #results-screen {
+            display: none; /* Hidden by default */
+        }
+        .panel-content {
+            background-color: #34495e;
+            padding: 30px 40px;
+            border-radius: 10px;
+        }
+        h1, h2 {
+            margin-top: 0;
+        }
+        .setting {
+            margin: 20px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 350px;
+        }
+        input[type="range"] {
+            width: 200px;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: white;
+            transition: background-color 0.3s;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #results-stats {
+            font-size: 1.5em;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
 
-    <!-- In-Game HUD Elements -->
-    <div id="hud">
-        <div id="crosshair">+</div>
-        <div class="bar-container">
-            <span>HEALTH</span>
-            <div id="health-bar-bg">
-                <div id="health-bar"></div>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- SETTINGS PANEL -->
+        <div id="settings">
+            <div class="panel-content">
+                <h1>Aim Trainer</h1>
+                <div class="setting">
+                    <label for="size-slider">Circle Size (CS):</label>
+                    <input type="range" id="size-slider" min="10" max="60" value="35">
+                    <span id="size-value">35</span>
+                </div>
+                <div class="setting">
+                    <label for="spawn-slider">Spawn Rate:</label>
+                    <input type="range" id="spawn-slider" min="15" max="100" value="60" step="5">
+                    <span id="spawn-value">60</span>
+                </div>
+                <div class="setting">
+                    <label for="lifespan-slider">Target Lifespan:</label>
+                    <input type="range" id="lifespan-slider" min="50" max="200" value="120" step="10">
+                    <span id="lifespan-value">120</span>
+                </div>
+                <button id="start-button">Start Training (60s)</button>
             </div>
         </div>
-        <!-- Stamina Bar has been removed -->
+
+        <!-- RESULTS SCREEN -->
+        <div id="results-screen">
+             <div class="panel-content">
+                <h2>Session Complete!</h2>
+                <div id="results-stats">
+                    <p>Hits: <span id="res-hits">0</span></p>
+                    <p>Misses: <span id="res-misses">0</span></p>
+                    <p>Accuracy: <span id="res-accuracy">0.00%</span></p>
+                </div>
+                <button id="restart-button">Train Again</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Start/End Game Overlay -->
-    <div id="overlay">
-        <h1 id="overlay-title">BLADEFALL</h1>
-        <p id="overlay-text">
-            <strong>WASD:</strong> Move | <strong>Mouse:</strong> Aim/Attack<br>
-            <strong>Shift:</strong> Sprint | <strong>Space:</strong> Jump<br>
-            <strong>Right-Click:</strong> Block | <strong>F:</strong> Kick<br><br>
-            Defeat the Red Knight!<br><br>
-            <strong class="pulse">Press ENTER to Begin</strong>
-        </p>
-    </div>
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const settingsPanel = document.getElementById('settings');
+        const resultsScreen = document.getElementById('results-screen');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        
+        const sizeSlider = document.getElementById('size-slider');
+        const spawnSlider = document.getElementById('spawn-slider');
+        const lifespanSlider = document.getElementById('lifespan-slider');
 
-    <!-- Import Libraries -->
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+        const sizeValue = document.getElementById('size-value');
+        const spawnValue = document.getElementById('spawn-value');
+        const lifespanValue = document.getElementById('lifespan-value');
+
+        // Game State
+        let circles = [];
+        let hits = 0;
+        let misses = 0;
+        let totalClicks = 0;
+        let isPlaying = false;
+        let spawnTimer = 0;
+        let gameTimer = 0;
+        let sessionInterval;
+
+        // Game Settings
+        const SESSION_DURATION = 60; // in seconds
+        let settings = {
+            circleSize: parseInt(sizeSlider.value),
+            spawnRate: parseInt(spawnSlider.value),
+            lifespan: parseInt(lifespanSlider.value)
+        };
+
+        // Represents a single target
+        class Circle {
+            constructor() {
+                this.radius = settings.circleSize;
+                const margin = this.radius;
+                this.x = Math.random() * (canvas.width - margin * 2) + margin;
+                this.y = Math.random() * (canvas.height - margin * 2) + margin;
+                this.life = settings.lifespan;
+                this.maxLife = settings.lifespan;
+            }
+            draw() {
+                const opacity = this.life / this.maxLife;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(52, 152, 219, ${opacity})`;
+                ctx.fill();
+            }
+            update() {
+                this.life--;
             }
         }
-    </script>
 
-    <!-- Game Logic -->
-    <script type="module" src="main.js"></script>
+        function resizeCanvas() {
+            canvas.width = Math.min(window.innerWidth * 0.9, 1280);
+            canvas.height = Math.min(window.innerHeight * 0.9, 720);
+        }
+
+        function spawnCircle() {
+            circles.push(new Circle());
+        }
+
+        function startGame() {
+            // Reset stats
+            hits = 0;
+            misses = 0;
+            totalClicks = 0;
+            circles = [];
+            isPlaying = true;
+            gameTimer = SESSION_DURATION;
+            
+            settingsPanel.style.display = 'none';
+            resultsScreen.style.display = 'none';
+            
+            // Start the session countdown
+            sessionInterval = setInterval(() => {
+                gameTimer--;
+                if (gameTimer <= 0) {
+                    endGame();
+                }
+            }, 1000);
+            
+            gameLoop();
+        }
+
+        function endGame() {
+            isPlaying = false;
+            clearInterval(sessionInterval);
+            
+            // Show results
+            document.getElementById('res-hits').textContent = hits;
+            document.getElementById('res-misses').textContent = misses;
+            const accuracy = totalClicks > 0 ? (hits / totalClicks) * 100 : 0;
+            document.getElementById('res-accuracy').textContent = `${accuracy.toFixed(2)}%`;
+            
+            resultsScreen.style.display = 'flex';
+        }
+        
+        function handleCanvasClick(event) {
+            if (!isPlaying) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            let hit = false;
+            totalClicks++;
+
+            for (let i = circles.length - 1; i >= 0; i--) {
+                const circle = circles[i];
+                const distance = Math.sqrt((x - circle.x)**2 + (y - circle.y)**2);
+                if (distance <= circle.radius) {
+                    hits++;
+                    circles.splice(i, 1);
+                    hit = true;
+                    break;
+                }
+            }
+        }
+
+        function drawUI() {
+            ctx.fillStyle = 'white';
+            ctx.font = '24px Segoe UI';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Hits: ${hits}`, 20, 40);
+            ctx.textAlign = 'center';
+            ctx.font = '32px Segoe UI';
+            ctx.fillText(`Time: ${gameTimer}`, canvas.width / 2, 45);
+            ctx.textAlign = 'right';
+            ctx.font = '24px Segoe UI';
+            const accuracy = totalClicks > 0 ? (hits / totalClicks) * 100 : 0;
+            ctx.fillText(`Acc: ${accuracy.toFixed(1)}%`, canvas.width - 20, 40);
+        }
+
+        // The main game loop
+        function gameLoop() {
+            if (!isPlaying) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Spawn logic
+            spawnTimer--;
+            if (spawnTimer <= 0) {
+                spawnCircle();
+                spawnTimer = settings.spawnRate;
+            }
+
+            // Update and draw circles
+            for (let i = circles.length - 1; i >= 0; i--) {
+                const circle = circles[i];
+                circle.update();
+                if (circle.life <= 0) {
+                    misses++;
+                    circles.splice(i, 1);
+                    continue;
+                }
+                circle.draw();
+            }
+
+            drawUI();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event Listeners
+        window.addEventListener('resize', resizeCanvas);
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', () => {
+            resultsScreen.style.display = 'none';
+            settingsPanel.style.display = 'flex';
+        });
+        canvas.addEventListener('mousedown', handleCanvasClick);
+
+        // Slider listeners to update values and settings object
+        sizeSlider.addEventListener('input', e => {
+            settings.circleSize = parseInt(e.target.value);
+            sizeValue.textContent = e.target.value;
+        });
+        spawnSlider.addEventListener('input', e => {
+            settings.spawnRate = parseInt(e.target.value);
+            spawnValue.textContent = e.target.value;
+        });
+        lifespanSlider.addEventListener('input', e => {
+            settings.lifespan = parseInt(e.target.value);
+            lifespanValue.textContent = e.target.value;
+        });
+
+        // Initial Setup
+        resizeCanvas();
+    </script>
 </body>
 </html>
