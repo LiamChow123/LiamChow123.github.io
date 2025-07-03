@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Bullet Break</title>
+<title>Bullet Break: Shatterpoint</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -20,13 +20,12 @@
     align-items: center;
     height: 100vh;
     user-select: none;
-    font-family: 'Press Start 2P', cursive;
+    font-family: 'Press+Start+2P', cursive;
     color: #fff;
   }
 
   canvas {
-    /* Represents the glass pane */
-    background: rgba(173, 216, 230, 0.2); /* Light blue, semi-transparent */
+    background: rgba(10, 10, 20, 0.4); /* Darker, more serious background */
     display: block;
     border: 3px solid rgba(255, 255, 255, 0.4);
     border-radius: 15px;
@@ -55,7 +54,7 @@
     text-shadow: 2px 2px 6px #000c;
     user-select: none;
     pointer-events: none;
-    white-space: pre; /* Allows newline characters */
+    white-space: pre;
   }
 </style>
 </head>
@@ -72,30 +71,35 @@
 
   const WIDTH = canvas.width;
   const HEIGHT = canvas.height;
+  
+  // --- HELPER FUNCTION FOR SMOOTHING ---
+  const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
 
-  // --- NEW SOUNDS ---
+  // --- SOUNDS ---
   const sounds = {
     thrust: new Audio('https://freesound.org/data/previews/341/341695_62469-lq.mp3'),
-    hit: new Audio('https://freesound.org/data/previews/23/23389_133742-lq.mp3'), // Glass break
-    point: new Audio('https://freesound.org/data/previews/43/43132_359333-lq.mp3'), // Ricochet
+    hit: new Audio('https://freesound.org/data/previews/23/23389_133742-lq.mp3'),
+    point: new Audio('https://freesound.org/data/previews/43/43132_359333-lq.mp3'),
     gunshot: new Audio('https://freesound.org/data/previews/58/58245_599498-lq.mp3')
   };
 
-  sounds.thrust.volume = 0.2;
-  sounds.hit.volume = 0.4;
-  sounds.point.volume = 0.3;
+  sounds.thrust.volume = 0.15;
+  sounds.hit.volume = 0.5;
+  sounds.point.volume = 0.2;
   sounds.gunshot.volume = 0.3;
 
-  // --- PLAYER IS NOW A BULLET ---
+  // --- IMPROVED BULLET ---
   const bullet = {
-    startX: 80,
-    x: -30, // Starts off-screen
+    startX: 90,
+    x: -30,
     y: HEIGHT / 2,
-    width: 30,
-    height: 10,
-    gravity: 0.4,
-    lift: -8,
+    width: 35,
+    height: 12,
+    gravity: 0.35,
+    lift: -7,
     velocity: 0,
+    rotation: 0,
+    targetRotation: 0,
     applyThrust() {
       this.velocity = this.lift;
       sounds.thrust.currentTime = 0;
@@ -103,10 +107,13 @@
     },
     update() {
       this.velocity += this.gravity;
-      this.velocity *= 0.95; // air resistance
       this.y += this.velocity;
+      
+      // Calculate target rotation based on velocity (tilts up/down)
+      this.targetRotation = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, this.velocity * 0.05));
+      // Smoothly interpolate to the target rotation
+      this.rotation = lerp(this.rotation, this.targetRotation, 0.1);
 
-      // Keep bullet within the screen
       if (this.y + this.height > HEIGHT) {
         this.y = HEIGHT - this.height;
         this.velocity = 0;
@@ -118,182 +125,236 @@
     },
     draw() {
       ctx.save();
-      ctx.translate(this.x, this.y);
+      ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+      ctx.rotate(this.rotation);
+      ctx.translate(-(this.x + this.width / 2), -(this.y + this.height / 2));
 
-      // Bullet Casing (darker grey)
-      ctx.fillStyle = '#6c757d';
+      // Speed trail
+      ctx.fillStyle = 'rgba(255, 223, 0, 0.3)';
       ctx.beginPath();
-      ctx.rect(0, 0, this.width - 10, this.height);
-      ctx.fill();
-
-      // Bullet Tip (brassy color)
-      ctx.fillStyle = '#d4af37';
-      ctx.beginPath();
-      ctx.moveTo(this.width - 10, 0);
-      ctx.lineTo(this.width, this.height / 2);
-      ctx.lineTo(this.width - 10, this.height);
+      ctx.moveTo(this.x - 10, this.y + this.height / 2 - 2);
+      ctx.lineTo(this.x, this.y + this.height / 2);
+      ctx.lineTo(this.x - 10, this.y + this.height / 2 + 2);
       ctx.closePath();
       ctx.fill();
       
+      // Bullet body with gradient for metallic look
+      const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
+      grad.addColorStop(0, '#fefefe');
+      grad.addColorStop(0.5, '#d4af37');
+      grad.addColorStop(1, '#b8860b');
+      ctx.fillStyle = grad;
+
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.x + this.width - 5, this.y);
+      ctx.lineTo(this.x + this.width, this.y + this.height / 2);
+      ctx.lineTo(this.x + this.width - 5, this.y + this.height);
+      ctx.lineTo(this.x, this.y + this.height);
+      ctx.closePath();
+      ctx.fill();
+
+      // Highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillRect(this.x + 5, this.y + 2, this.width - 15, 2);
+
       ctx.restore();
     }
   };
   
-  // --- GUN FOR SHOOTING ANIMATION ---
+  // --- IMPROVED GUN ---
   const gun = {
     x: 0,
     y: 0,
-    width: 100,
-    height: 50,
+    width: 110,
+    height: 60,
     recoil: 0,
     flashOpacity: 0,
     draw() {
-      const gunY = bullet.y - (this.height - bullet.height) / 2;
+      const gunY = bullet.y - (this.height - bullet.height) / 2 - 10;
       const gunX = this.x - this.recoil;
       
-      // Draw muzzle flash
       if(this.flashOpacity > 0) {
         ctx.fillStyle = `rgba(255, 223, 0, ${this.flashOpacity})`;
         ctx.beginPath();
-        ctx.moveTo(gunX + this.width, gunY + this.height / 2);
+        const flashX = gunX + this.width - 15;
+        const flashY = gunY + 18;
+        ctx.moveTo(flashX, flashY);
         for(let i = 0; i < 8; i++) {
-          const angle = i * Math.PI / 4;
-          const length = (i % 2 === 0) ? 40 : 20;
-          ctx.lineTo(
-            gunX + this.width + Math.cos(angle) * length,
-            gunY + this.height / 2 + Math.sin(angle) * length
-          );
+          const angle = i * Math.PI / 4 + Math.random() * 0.2;
+          const length = (i % 2 === 0) ? 45 : 22;
+          ctx.lineTo(flashX + Math.cos(angle) * length, flashY + Math.sin(angle) * length);
         }
         ctx.closePath();
         ctx.fill();
       }
-
-      // Draw gun body
+      
+      // Grip
+      ctx.fillStyle = '#212529';
+      ctx.beginPath();
+      ctx.moveTo(gunX + 20, gunY + 30);
+      ctx.lineTo(gunX + 15, gunY + 58);
+      ctx.lineTo(gunX + 45, gunY + 58);
+      ctx.lineTo(gunX + 40, gunY + 30);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Main Body (Slide)
       ctx.fillStyle = '#343a40';
-      ctx.fillRect(gunX, gunY, this.width - 20, this.height);
+      ctx.fillRect(gunX, gunY, this.width - 10, 32);
+      
+      // Barrel
       ctx.fillStyle = '#495057';
-      ctx.fillRect(gunX + this.width - 20, gunY + 10, 20, this.height - 20); // Barrel
+      ctx.fillRect(gunX, gunY + 12, this.width, 10);
     }
   };
 
-  // --- OBSTACLES ARE NOW CRACKS IN GLASS ---
-  const crackWidth = 80;
-  const crackGap = 150;
-  const crackSpeed = 2;
-  let cracks = [];
+  // --- GLASS PANEL OBSTACLES ---
+  const panelWidth = 90;
+  const panelGap = 160;
+  const panelSpeed = 2.5;
+  let panels = [];
 
-  function createCrack() {
-    const minHeight = 50;
-    const maxHeight = HEIGHT - crackGap - 50;
+  function createPanel() {
+    const minHeight = 60;
+    const maxHeight = HEIGHT - panelGap - 60;
     const topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+    const bottomHeight = HEIGHT - (topHeight + panelGap);
 
     const generateJaggedPoints = (numPoints, maxOffset) => {
       let points = [];
       for (let i = 0; i <= numPoints; i++) {
         points.push({
-          x: (crackWidth / numPoints) * i,
-          y: (Math.random() - 0.5) * maxOffset
+          x: (panelWidth / numPoints) * i,
+          y: Math.random() * maxOffset
         });
       }
       return points;
     };
 
-    cracks.push({
+    panels.push({
       x: WIDTH,
-      top: topHeight,
-      bottom: HEIGHT - (topHeight + crackGap),
+      topHeight: topHeight,
+      bottomY: topHeight + panelGap,
+      bottomHeight: bottomHeight,
       passed: false,
-      topPoints: generateJaggedPoints(10, 20),
-      bottomPoints: generateJaggedPoints(10, 20)
+      jaggedPoints: generateJaggedPoints(8, 20)
     });
   }
 
-  // --- NEW DRAWING FUNCTION FOR CRACKS ---
-  function drawCrack(x, y, height, isTop, points) {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  function drawPanel(p) {
+    ctx.fillStyle = 'rgba(173, 216, 230, 0.35)';
+    ctx.strokeStyle = 'rgba(220, 240, 255, 0.6)';
     ctx.lineWidth = 2;
 
+    // Top Panel
     ctx.beginPath();
-    ctx.moveTo(x, y);
-    if (isTop) {
-      ctx.lineTo(x + crackWidth, y);
-      ctx.lineTo(x + crackWidth, y + height);
-      // Jagged edge
-      points.forEach(p => ctx.lineTo(x + p.x, y + height + p.y));
-      ctx.lineTo(x, y + height);
-    } else {
-      // Jagged edge
-      points.forEach(p => ctx.lineTo(x + p.x, y + p.y));
-      ctx.lineTo(x + crackWidth, y);
-      ctx.lineTo(x + crackWidth, y + height);
-      ctx.lineTo(x, y + height);
-    }
+    ctx.moveTo(p.x, 0);
+    ctx.lineTo(p.x + panelWidth, 0);
+    ctx.lineTo(p.x + panelWidth, p.topHeight);
+    p.jaggedPoints.forEach(point => ctx.lineTo(p.x + point.x, p.topHeight - point.y));
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Bottom Panel
+    ctx.beginPath();
+    ctx.moveTo(p.x, HEIGHT);
+    ctx.lineTo(p.x + panelWidth, HEIGHT);
+    ctx.lineTo(p.x + panelWidth, p.bottomY);
+    p.jaggedPoints.slice().reverse().forEach(point => ctx.lineTo(p.x + point.x, p.bottomY + point.y));
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
   }
 
-  // --- GAME STATE MANAGEMENT ---
+  // --- SHATTER EFFECT ---
+  let particles = [];
+  function createShatterEffect(x, y) {
+    for (let i = 0; i < 40; i++) {
+      particles.push({
+        x: x,
+        y: y,
+        vx: (Math.random() - 0.5) * 8,
+        vy: (Math.random() - 0.5) * 8,
+        alpha: 1,
+        size: Math.random() * 4 + 1,
+        gravity: 0.2
+      });
+    }
+  }
+
+  function updateAndDrawParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.vx *= 0.98;
+      p.vy += p.gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.alpha -= 0.02;
+
+      if (p.alpha <= 0) {
+        particles.splice(i, 1);
+      } else {
+        ctx.fillStyle = `rgba(220, 240, 255, ${p.alpha})`;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      }
+    }
+  }
+
+  // --- GAME STATE & LOOP ---
   let score = 0;
   let frames = 0;
-  let gameState = 'start'; // 'start', 'shooting', 'playing', 'gameover'
+  let gameState = 'start';
   let animationFrame = 0;
 
   function resetGame() {
-    cracks = [];
+    panels = [];
+    particles = [];
     score = 0;
     frames = 0;
     bullet.y = HEIGHT / 2;
     bullet.velocity = 0;
-    bullet.x = -bullet.width; // Position bullet off-screen for animation
+    bullet.rotation = 0;
+    bullet.x = -bullet.width;
     gameState = 'start';
     scoreEl.textContent = '0';
     messageEl.textContent = 'Press Space to Shoot';
     messageEl.style.display = 'block';
   }
 
-  function collision(crack) {
-    const bx = bullet.x;
-    const by = bullet.y;
-    const bw = bullet.width;
-    const bh = bullet.height;
+  function collision(p) {
+      const bx = bullet.x;
+      const by = bullet.y;
+      const bw = bullet.width;
+      const bh = bullet.height;
 
-    // Check collision with the crack's solid parts
-    if (bx + bw > crack.x && bx < crack.x + crackWidth) {
-      if (by < crack.top || by + bh > HEIGHT - crack.bottom) {
-        return true;
+      if (bx + bw > p.x && bx < p.x + panelWidth) {
+          if (by < p.topHeight || by + bh > p.bottomY) {
+              return true;
+          }
       }
-    }
-    return false;
+      return false;
   }
 
-  // --- MAIN GAME LOOP ---
   function update() {
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
-
-    // Update and draw cracks for all states except 'start'
-    if (gameState !== 'start') {
-        for (let p of cracks) {
-          drawCrack(p.x, 0, p.top, true, p.topPoints);
-          drawCrack(p.x, HEIGHT - p.bottom, p.bottom, false, p.bottomPoints);
-        }
+    
+    for (let p of panels) {
+      drawPanel(p);
     }
+    updateAndDrawParticles();
 
     if (gameState === 'start') {
       gun.draw();
-      bullet.y = HEIGHT / 2; // Keep gun centered
+      bullet.y = HEIGHT / 2;
       messageEl.style.display = 'block';
     } else if (gameState === 'shooting') {
         messageEl.style.display = 'none';
         animationFrame++;
         
-        // --- Gun Animation Logic ---
-        // Recoil
-        gun.recoil = Math.sin(animationFrame * Math.PI / 30) * 15;
-        // Muzzle flash
+        gun.recoil = Math.sin(animationFrame * Math.PI / 30) * 20;
         gun.flashOpacity = Math.max(0, 1 - animationFrame / 15);
-        // Move bullet out of gun
         bullet.x = (bullet.startX + bullet.width) * (animationFrame / 30) - bullet.width;
 
         gun.draw();
@@ -312,39 +373,30 @@
       bullet.update();
       bullet.draw();
 
-      if (frames % 100 === 0) { // Cracks are slightly further apart
-        createCrack();
+      if (frames % 80 === 0) {
+        createPanel();
       }
 
-      for (let i = 0; i < cracks.length; i++) {
-        const p = cracks[i];
-        p.x -= crackSpeed;
-
+      for (let p of panels) {
+        p.x -= panelSpeed;
         if (collision(p)) {
           sounds.hit.play();
+          createShatterEffect(bullet.x + bullet.width / 2, bullet.y + bullet.height / 2);
           gameState = 'gameover';
           messageEl.textContent = 'Shattered\nPress Space to Restart';
           messageEl.style.display = 'block';
         }
-
-        if (!p.passed && p.x + crackWidth < bullet.x) {
+        if (!p.passed && p.x + panelWidth < bullet.x) {
           score++;
           p.passed = true;
           scoreEl.textContent = score;
           sounds.point.play();
         }
       }
+      panels = panels.filter(p => p.x + panelWidth > 0);
 
-      cracks = cracks.filter(p => p.x + crackWidth > 0);
-
-      if (bullet.y <= 0 || bullet.y + bullet.height >= HEIGHT) {
-        sounds.hit.play();
-        gameState = 'gameover';
-        messageEl.textContent = 'Shattered\nPress Space to Restart';
-        messageEl.style.display = 'block';
-      }
     } else if (gameState === 'gameover') {
-      bullet.draw();
+      // Don't draw the bullet, it has shattered
     }
 
     frames++;
@@ -371,12 +423,8 @@
       handleInput();
     }
   });
+  window.addEventListener('mousedown', () => handleInput());
 
-  window.addEventListener('mousedown', () => {
-    handleInput();
-  });
-
-  // Start game
   resetGame();
   update();
 })();
