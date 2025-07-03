@@ -10,9 +10,6 @@ const CONFIG = {
         JUMP_FORCE: 7,
         CAM_SMOOTHING: 0.1,
         MAX_HEALTH: 100,
-        MAX_STAMINA: 100,
-        STAMINA_REGEN: 20,
-        STAMINA_COSTS: { SPRINT: 30, JUMP: 10, BLOCK: 60, KICK: 25 },
         KICK_FORCE: 600,
         DAMAGE_TAKEN: 20,
         BLOCK_DAMAGE_REDUCTION: 0.8,
@@ -20,7 +17,7 @@ const CONFIG = {
     ENEMY: {
         MOVE_SPEED: 4,
         MAX_HEALTH: 100,
-        ATTACK_COOLDOWN: 1.5, // in seconds
+        ATTACK_COOLDOWN: 1.5,
         ATTACK_RANGE: 3.5,
         CHASE_RANGE: 15,
         ATTACK_FORCE: 12,
@@ -49,7 +46,6 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayText = document.getElementById('overlay-text');
 const healthBar = document.getElementById('health-bar');
-const staminaBar = document.getElementById('stamina-bar');
 
 // --- PHYSICS WORLD ---
 const world = new CANNON.World({ gravity: new CANNON.Vec3(0, CONFIG.GRAVITY, 0) });
@@ -115,7 +111,7 @@ class Character {
         this.storeState();
     }
 
-    takeDamage(amount, sourceBody) {
+    takeDamage(amount) {
         this.health = Math.max(0, this.health - amount);
         this.mesh.material.color.set(0xffffff);
         setTimeout(() => this.mesh.material.color.set(this.originalColor), 100);
@@ -136,7 +132,6 @@ class Player extends Character {
     constructor(startPos) {
         super(CONFIG.PLAYER, startPos, GROUP_PLAYER, 0xeeeeee);
         this.originalColor = 0xeeeeee;
-        this.stamina = this.config.MAX_STAMINA;
         this.isBlocking = false;
         this.targetCameraRotation = { x: 0, y: 0 };
         this.sword = new Sword(GROUP_SWORD_P, 0xC0C0C0, this);
@@ -164,16 +159,11 @@ class Player extends Character {
         camera.position.x += (Math.random() - 0.5) * 0.2;
     }
 
-    update(deltaTime) {
-        this.isBlocking = input.mouse.rightClick && this.stamina > 0;
+    update() {
+        this.isBlocking = input.mouse.rightClick;
 
-        // Stamina
-        if (!input.keys.has('ShiftLeft') && !this.isBlocking) this.stamina = Math.min(this.config.MAX_STAMINA, this.stamina + this.config.STAMINA_REGEN * deltaTime);
-        if (input.keys.has('ShiftLeft')) this.stamina = Math.max(0, this.stamina - this.config.STAMINA_COSTS.SPRINT * deltaTime);
-        if (this.isBlocking) this.stamina = Math.max(0, this.stamina - this.config.STAMINA_COSTS.BLOCK * deltaTime);
-
-        // Movement
-        const speed = input.keys.has('ShiftLeft') && this.stamina > 0 ? this.config.SPRINT_SPEED : this.config.MOVE_SPEED;
+        // Movement (no stamina check needed)
+        const speed = input.keys.has('ShiftLeft') ? this.config.SPRINT_SPEED : this.config.MOVE_SPEED;
         const moveDir = new THREE.Vector3((input.keys.has('KeyD') ? 1:0)-(input.keys.has('KeyA')?1:0), 0, (input.keys.has('KeyS')?1:0)-(input.keys.has('KeyW')?1:0));
         if (moveDir.lengthSq() > 0) {
             moveDir.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.targetCameraRotation.y);
@@ -181,19 +171,17 @@ class Player extends Character {
             this.body.velocity.z = moveDir.z * speed;
         }
 
-        // Jump & Kick (single press actions)
-        if (input.keys.has('Space') && this.stamina > this.config.STAMINA_COSTS.JUMP) {
+        // Jump & Kick (single press actions, no stamina cost)
+        if (input.keys.has('Space')) {
             if (world.raycastClosest(this.body.position, new CANNON.Vec3(this.body.position.x, this.body.position.y - 1.1, this.body.position.z), {})) {
                 this.body.velocity.y = this.config.JUMP_FORCE;
-                this.stamina -= this.config.STAMINA_COSTS.JUMP;
             }
         }
-        if (input.keys.has('KeyF') && this.stamina > this.config.STAMINA_COSTS.KICK) {
+        if (input.keys.has('KeyF')) {
             if (this.body.position.distanceTo(enemy.body.position) < 2.5) {
                 const kickDir = enemy.body.position.vsub(this.body.position).unit();
                 enemy.body.applyImpulse(kickDir.scale(this.config.KICK_FORCE), enemy.body.position);
             }
-            this.stamina -= this.config.STAMINA_COSTS.KICK;
         }
         input.keys.delete('Space');
         input.keys.delete('KeyF');
@@ -241,11 +229,19 @@ class Enemy extends Character {
     update(deltaTime) {
         this.attackTimer -= deltaTime;
         const distance = this.body.position.distanceTo(player.body.position);
-        const direction = player.body.position.vsub(this.body.position).unit();
         
+        // --- BUG FIX ---
+        // Create a direction vector and check its length before normalizing
+        const directionVec = player.body.position.vsub(this.body.position);
+        if (directionVec.lengthSquared() < 0.01) { // If they are on top of each other, do nothing
+            return;
+        }
+        const direction = directionVec.unit(); // Now it's safe to normalize
+
         // State Machine
         if (distance < this.config.ATTACK_RANGE) this.state = 'ATTACKING';
         else if (distance < this.config.CHASE_RANGE) this.state = 'CHASING';
+        else this.state = 'IDLE';
         
         switch(this.state) {
             case 'CHASING':
@@ -257,6 +253,9 @@ class Enemy extends Character {
                     this.sword.body.velocity.copy(direction.scale(this.config.ATTACK_FORCE));
                     this.attackTimer = this.config.ATTACK_COOLDOWN;
                 }
+                break;
+            case 'IDLE':
+                // Stand still if player is too far
                 break;
         }
 
@@ -282,15 +281,8 @@ class Sword {
         this.storeState();
     }
     
-    storeState() {
-        this.previousState.position.copy(this.body.position);
-        this.previousState.quaternion.copy(this.body.quaternion);
-    }
-    
-    interpolateState(alpha) {
-        this.mesh.position.lerpVectors(this.previousState.position, this.body.position, alpha);
-        this.mesh.quaternion.slerpQuaternions(this.previousState.quaternion, this.body.quaternion, alpha);
-    }
+    storeState() { this.previousState.position.copy(this.body.position); this.previousState.quaternion.copy(this.body.quaternion); }
+    interpolateState(alpha) { this.mesh.position.lerpVectors(this.previousState.position, this.body.position, alpha); this.mesh.quaternion.slerpQuaternions(this.previousState.quaternion, this.body.quaternion, alpha); }
 
     update(isBlocking = false) {
         if (this.owner instanceof Player) { // Player sword logic
@@ -324,7 +316,6 @@ function initGame() {
 
 function resetGame() {
     player.health = player.config.MAX_HEALTH;
-    player.stamina = player.config.MAX_STAMINA;
     player.body.position.set(0, 2, 8);
     player.body.velocity.set(0,0,0);
     
@@ -356,7 +347,7 @@ function animate() {
     const deltaTime = clock.getDelta();
 
     if (gameState === 'playing') {
-        player.update(deltaTime);
+        player.update();
         enemy.update(deltaTime);
         
         accumulator += deltaTime;
@@ -370,7 +361,6 @@ function animate() {
         gameObjects.forEach(obj => obj.interpolateState(alpha));
 
         healthBar.style.width = (player.health / player.config.MAX_HEALTH) * 100 + '%';
-        staminaBar.style.width = (player.stamina / player.config.MAX_STAMINA) * 100 + '%';
     }
 
     renderer.render(scene, camera);
