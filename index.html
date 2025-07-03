@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5203039798099176"
-     crossorigin="anonymous"></script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Flappy Bird Improved</title>
+<title>Bullet Break</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -15,7 +13,7 @@
 
   body {
     margin: 0;
-    background: linear-gradient(to bottom, #70c5ce 0%, #33a0d3 100%);
+    background: linear-gradient(to bottom, #141e30 0%, #243b55 100%);
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -27,12 +25,14 @@
   }
 
   canvas {
-    background: #70c5ce;
+    /* Represents the glass pane */
+    background: rgba(173, 216, 230, 0.2); /* Light blue, semi-transparent */
     display: block;
+    border: 3px solid rgba(255, 255, 255, 0.4);
     border-radius: 15px;
     box-shadow:
       0 8px 20px rgba(0, 0, 0, 0.4),
-      inset 0 -5px 30px #3db5e5;
+      inset 0 0 40px rgba(255, 255, 255, 0.1);
   }
 
   #score {
@@ -55,12 +55,13 @@
     text-shadow: 2px 2px 6px #000c;
     user-select: none;
     pointer-events: none;
+    white-space: pre; /* Allows newline characters */
   }
 </style>
 </head>
 <body>
 <div id="score">0</div>
-<div id="message">Press Space or Click to Start</div>
+<div id="message">Press Space to Shoot</div>
 <canvas id="game" width="400" height="600"></canvas>
 <script>
 (() => {
@@ -72,50 +73,42 @@
   const WIDTH = canvas.width;
   const HEIGHT = canvas.height;
 
-  // Sounds
+  // --- NEW SOUNDS ---
   const sounds = {
-    flap: new Audio('https://freesound.org/data/previews/341/341695_62469-lq.mp3'),
-    hit: new Audio('https://freesound.org/data/previews/198/198841_2859972-lq.mp3'),
-    point: new Audio('https://freesound.org/data/previews/109/109662_945474-lq.mp3')
+    thrust: new Audio('https://freesound.org/data/previews/341/341695_62469-lq.mp3'),
+    hit: new Audio('https://freesound.org/data/previews/23/23389_133742-lq.mp3'), // Glass break
+    point: new Audio('https://freesound.org/data/previews/43/43132_359333-lq.mp3'), // Ricochet
+    gunshot: new Audio('https://freesound.org/data/previews/58/58245_599498-lq.mp3')
   };
 
-  sounds.flap.volume = 0.15;
-  sounds.hit.volume = 0.3;
-  sounds.point.volume = 0.2;
+  sounds.thrust.volume = 0.2;
+  sounds.hit.volume = 0.4;
+  sounds.point.volume = 0.3;
+  sounds.gunshot.volume = 0.3;
 
-  // Bird properties
-  const bird = {
-    x: 80,
+  // --- PLAYER IS NOW A BULLET ---
+  const bullet = {
+    startX: 80,
+    x: -30, // Starts off-screen
     y: HEIGHT / 2,
-    width: 34,
-    height: 24,
-    gravity: 0.6,
-    lift: -11,
+    width: 30,
+    height: 10,
+    gravity: 0.4,
+    lift: -8,
     velocity: 0,
-    rotation: 0,
-    maxRotation: 25 * Math.PI / 180,
-    minRotation: -60 * Math.PI / 180,
-    jump() {
+    applyThrust() {
       this.velocity = this.lift;
-      sounds.flap.currentTime = 0;
-      sounds.flap.play();
+      sounds.thrust.currentTime = 0;
+      sounds.thrust.play();
     },
     update() {
       this.velocity += this.gravity;
-      this.velocity *= 0.9; // air resistance
+      this.velocity *= 0.95; // air resistance
       this.y += this.velocity;
 
-      // Rotation logic for bird tilting
-      if (this.velocity < 0) {
-        this.rotation = this.minRotation;
-      } else if (this.velocity > 5) {
-        this.rotation = this.maxRotation;
-      } else {
-        this.rotation = this.velocity / 5 * this.maxRotation;
-      }
-
-      if (this.y + this.height > HEIGHT - ground.height) {
-        this.y = HEIGHT - ground.height - this.height;
+      // Keep bullet within the screen
+      if (this.y + this.height > HEIGHT) {
+        this.y = HEIGHT - this.height;
         this.velocity = 0;
       }
       if (this.y < 0) {
@@ -125,194 +118,216 @@
     },
     draw() {
       ctx.save();
-      ctx.translate(this.x + this.width/2, this.y + this.height/2);
-      ctx.rotate(this.rotation);
+      ctx.translate(this.x, this.y);
 
-      // Bird body
-      const grad = ctx.createRadialGradient(0, 0, this.width/4, 0, 0, this.width/2);
-      grad.addColorStop(0, '#FFEB3B');
-      grad.addColorStop(1, '#FBC02D');
-      ctx.fillStyle = grad;
-      ctx.strokeStyle = '#C9A900';
-      ctx.lineWidth = 2;
-
+      // Bullet Casing (darker grey)
+      ctx.fillStyle = '#6c757d';
       ctx.beginPath();
-      ctx.ellipse(0, 0, this.width/2, this.height/2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      // Eye
-      ctx.fillStyle = '#222';
-      ctx.beginPath();
-      ctx.ellipse(5, -3, 4, 4, 0, 0, Math.PI * 2);
+      ctx.rect(0, 0, this.width - 10, this.height);
       ctx.fill();
 
-      // Beak
-      ctx.fillStyle = '#FF9800';
+      // Bullet Tip (brassy color)
+      ctx.fillStyle = '#d4af37';
       ctx.beginPath();
-      ctx.moveTo(this.width/2, 0);
-      ctx.lineTo(this.width/2 + 10, -5);
-      ctx.lineTo(this.width/2 + 10, 5);
+      ctx.moveTo(this.width - 10, 0);
+      ctx.lineTo(this.width, this.height / 2);
+      ctx.lineTo(this.width - 10, this.height);
       ctx.closePath();
       ctx.fill();
-
+      
       ctx.restore();
     }
   };
-
-  // Ground properties
-  const ground = {
-    height: 80,
-    speed: 2,
+  
+  // --- GUN FOR SHOOTING ANIMATION ---
+  const gun = {
     x: 0,
+    y: 0,
+    width: 100,
+    height: 50,
+    recoil: 0,
+    flashOpacity: 0,
     draw() {
-      // draw a simple ground with grass effect
-      const groundHeight = this.height;
-      ctx.fillStyle = '#DEB887';
-      ctx.fillRect(0, HEIGHT - groundHeight, WIDTH, groundHeight);
-
-      // grass blades
-      ctx.fillStyle = '#228B22';
-      for(let i = this.x; i < WIDTH; i += 20) {
+      const gunY = bullet.y - (this.height - bullet.height) / 2;
+      const gunX = this.x - this.recoil;
+      
+      // Draw muzzle flash
+      if(this.flashOpacity > 0) {
+        ctx.fillStyle = `rgba(255, 223, 0, ${this.flashOpacity})`;
         ctx.beginPath();
-        ctx.moveTo(i, HEIGHT - groundHeight);
-        ctx.lineTo(i + 5, HEIGHT - groundHeight - 20);
-        ctx.lineTo(i + 10, HEIGHT - groundHeight);
+        ctx.moveTo(gunX + this.width, gunY + this.height / 2);
+        for(let i = 0; i < 8; i++) {
+          const angle = i * Math.PI / 4;
+          const length = (i % 2 === 0) ? 40 : 20;
+          ctx.lineTo(
+            gunX + this.width + Math.cos(angle) * length,
+            gunY + this.height / 2 + Math.sin(angle) * length
+          );
+        }
         ctx.closePath();
         ctx.fill();
       }
-    },
-    update() {
-      this.x -= this.speed;
-      if(this.x <= -20) this.x = 0;
+
+      // Draw gun body
+      ctx.fillStyle = '#343a40';
+      ctx.fillRect(gunX, gunY, this.width - 20, this.height);
+      ctx.fillStyle = '#495057';
+      ctx.fillRect(gunX + this.width - 20, gunY + 10, 20, this.height - 20); // Barrel
     }
   };
 
-  // Pipes properties
-  const pipeWidth = 70;
-  const pipeGap = 140;
-  const pipeSpeed = 2;
-  let pipes = [];
+  // --- OBSTACLES ARE NOW CRACKS IN GLASS ---
+  const crackWidth = 80;
+  const crackGap = 150;
+  const crackSpeed = 2;
+  let cracks = [];
 
-  function createPipe() {
-    // Random height for the top pipe
+  function createCrack() {
     const minHeight = 50;
-    const maxHeight = HEIGHT - ground.height - pipeGap - 50;
+    const maxHeight = HEIGHT - crackGap - 50;
     const topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
-    pipes.push({
+
+    const generateJaggedPoints = (numPoints, maxOffset) => {
+      let points = [];
+      for (let i = 0; i <= numPoints; i++) {
+        points.push({
+          x: (crackWidth / numPoints) * i,
+          y: (Math.random() - 0.5) * maxOffset
+        });
+      }
+      return points;
+    };
+
+    cracks.push({
       x: WIDTH,
       top: topHeight,
-      bottom: HEIGHT - ground.height - (topHeight + pipeGap),
-      passed: false
+      bottom: HEIGHT - (topHeight + crackGap),
+      passed: false,
+      topPoints: generateJaggedPoints(10, 20),
+      bottomPoints: generateJaggedPoints(10, 20)
     });
   }
 
-  // Game state
-  let score = 0;
-  let frames = 0;
-  let gameState = 'start'; // 'start', 'playing', 'gameover'
+  // --- NEW DRAWING FUNCTION FOR CRACKS ---
+  function drawCrack(x, y, height, isTop, points) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 2;
 
-  function resetGame() {
-    pipes = [];
-    score = 0;
-    frames = 0;
-    bird.y = HEIGHT / 2;
-    bird.velocity = 0;
-    gameState = 'start';
-    scoreEl.textContent = '0';
-    messageEl.textContent = 'Press Space or Click to Start';
-  }
-
-  // Detect collision between bird and pipes
-  function collision(pipe) {
-    const bx = bird.x;
-    const by = bird.y;
-    const bw = bird.width;
-    const bh = bird.height;
-
-    // Check top pipe
-    if (
-      bx + bw > pipe.x &&
-      bx < pipe.x + pipeWidth &&
-      by < pipe.top
-    ) {
-      return true;
-    }
-    // Check bottom pipe
-    if (
-      bx + bw > pipe.x &&
-      bx < pipe.x + pipeWidth &&
-      by + bh > HEIGHT - ground.height - pipe.bottom
-    ) {
-      return true;
-    }
-    return false;
-  }
-
-  // Draw pipes with nice shading
-  function drawPipe(x, y, height, isTop) {
-    ctx.fillStyle = '#228B22';
-    ctx.strokeStyle = '#176517';
-    ctx.lineWidth = 4;
-
-    // Pipe body
-    ctx.fillRect(x, y, pipeWidth, height);
-    ctx.strokeRect(x, y, pipeWidth, height);
-
-    // Pipe rim (ellipse)
     ctx.beginPath();
-    if(isTop) {
-      ctx.ellipse(x + pipeWidth/2, y + height, pipeWidth/2, 15, 0, Math.PI, 0, true);
+    ctx.moveTo(x, y);
+    if (isTop) {
+      ctx.lineTo(x + crackWidth, y);
+      ctx.lineTo(x + crackWidth, y + height);
+      // Jagged edge
+      points.forEach(p => ctx.lineTo(x + p.x, y + height + p.y));
+      ctx.lineTo(x, y + height);
     } else {
-      ctx.ellipse(x + pipeWidth/2, y, pipeWidth/2, 15, 0, 0, Math.PI, true);
+      // Jagged edge
+      points.forEach(p => ctx.lineTo(x + p.x, y + p.y));
+      ctx.lineTo(x + crackWidth, y);
+      ctx.lineTo(x + crackWidth, y + height);
+      ctx.lineTo(x, y + height);
     }
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
   }
 
-  // Game loop
+  // --- GAME STATE MANAGEMENT ---
+  let score = 0;
+  let frames = 0;
+  let gameState = 'start'; // 'start', 'shooting', 'playing', 'gameover'
+  let animationFrame = 0;
+
+  function resetGame() {
+    cracks = [];
+    score = 0;
+    frames = 0;
+    bullet.y = HEIGHT / 2;
+    bullet.velocity = 0;
+    bullet.x = -bullet.width; // Position bullet off-screen for animation
+    gameState = 'start';
+    scoreEl.textContent = '0';
+    messageEl.textContent = 'Press Space to Shoot';
+    messageEl.style.display = 'block';
+  }
+
+  function collision(crack) {
+    const bx = bullet.x;
+    const by = bullet.y;
+    const bw = bullet.width;
+    const bh = bullet.height;
+
+    // Check collision with the crack's solid parts
+    if (bx + bw > crack.x && bx < crack.x + crackWidth) {
+      if (by < crack.top || by + bh > HEIGHT - crack.bottom) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // --- MAIN GAME LOOP ---
   function update() {
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
-    // Background gradient handled by CSS, no need to draw sky here
+    // Update and draw cracks for all states except 'start'
+    if (gameState !== 'start') {
+        for (let p of cracks) {
+          drawCrack(p.x, 0, p.top, true, p.topPoints);
+          drawCrack(p.x, HEIGHT - p.bottom, p.bottom, false, p.bottomPoints);
+        }
+    }
 
-    // Update and draw ground
-    ground.update();
-    ground.draw();
-
-    if(gameState === 'start') {
-      bird.draw();
+    if (gameState === 'start') {
+      gun.draw();
+      bullet.y = HEIGHT / 2; // Keep gun centered
       messageEl.style.display = 'block';
+    } else if (gameState === 'shooting') {
+        messageEl.style.display = 'none';
+        animationFrame++;
+        
+        // --- Gun Animation Logic ---
+        // Recoil
+        gun.recoil = Math.sin(animationFrame * Math.PI / 30) * 15;
+        // Muzzle flash
+        gun.flashOpacity = Math.max(0, 1 - animationFrame / 15);
+        // Move bullet out of gun
+        bullet.x = (bullet.startX + bullet.width) * (animationFrame / 30) - bullet.width;
+
+        gun.draw();
+        bullet.draw();
+
+        if (animationFrame > 30) {
+            gameState = 'playing';
+            bullet.x = bullet.startX;
+            gun.recoil = 0;
+            gun.flashOpacity = 0;
+        }
+
     } else if (gameState === 'playing') {
       messageEl.style.display = 'none';
 
-      // Update bird
-      bird.update();
-      bird.draw();
+      bullet.update();
+      bullet.draw();
 
-      // Pipes generation
-      if (frames % 90 === 0) {
-        createPipe();
+      if (frames % 100 === 0) { // Cracks are slightly further apart
+        createCrack();
       }
 
-      // Move pipes and draw them
-      for (let i = 0; i < pipes.length; i++) {
-        const p = pipes[i];
-        p.x -= pipeSpeed;
+      for (let i = 0; i < cracks.length; i++) {
+        const p = cracks[i];
+        p.x -= crackSpeed;
 
-        drawPipe(p.x, 0, p.top, true); // top pipe
-        drawPipe(p.x, HEIGHT - ground.height - p.bottom, p.bottom, false); // bottom pipe
-
-        // Check collision
         if (collision(p)) {
           sounds.hit.play();
           gameState = 'gameover';
-          messageEl.textContent = 'Game Over\nPress Space or Click to Restart';
+          messageEl.textContent = 'Shattered\nPress Space to Restart';
           messageEl.style.display = 'block';
         }
 
-        // Check if passed for scoring
-        if (!p.passed && p.x + pipeWidth < bird.x) {
+        if (!p.passed && p.x + crackWidth < bullet.x) {
           score++;
           p.passed = true;
           scoreEl.textContent = score;
@@ -320,38 +335,31 @@
         }
       }
 
-      // Remove off-screen pipes
-      pipes = pipes.filter(p => p.x + pipeWidth > 0);
+      cracks = cracks.filter(p => p.x + crackWidth > 0);
 
-      // Check if bird hits ground or ceiling
-      if (bird.y + bird.height >= HEIGHT - ground.height || bird.y <= 0) {
+      if (bullet.y <= 0 || bullet.y + bullet.height >= HEIGHT) {
         sounds.hit.play();
         gameState = 'gameover';
-        messageEl.textContent = 'Game Over\nPress Space or Click to Restart';
+        messageEl.textContent = 'Shattered\nPress Space to Restart';
         messageEl.style.display = 'block';
       }
     } else if (gameState === 'gameover') {
-      bird.draw();
-
-      // Draw pipes
-      for (let p of pipes) {
-        drawPipe(p.x, 0, p.top, true);
-        drawPipe(p.x, HEIGHT - ground.height - p.bottom, p.bottom, false);
-      }
+      bullet.draw();
     }
 
     frames++;
     requestAnimationFrame(update);
   }
 
-  // Controls
-  function flap() {
+  // --- CONTROLS ---
+  function handleInput() {
     if (gameState === 'start') {
-      gameState = 'playing';
-      messageEl.style.display = 'none';
-      bird.jump();
+      sounds.gunshot.currentTime = 0;
+      sounds.gunshot.play();
+      gameState = 'shooting';
+      animationFrame = 0;
     } else if (gameState === 'playing') {
-      bird.jump();
+      bullet.applyThrust();
     } else if (gameState === 'gameover') {
       resetGame();
     }
@@ -360,12 +368,12 @@
   window.addEventListener('keydown', e => {
     if (e.code === 'Space' || e.code === 'ArrowUp') {
       e.preventDefault();
-      flap();
+      handleInput();
     }
   });
 
-  window.addEventListener('mousedown', e => {
-    flap();
+  window.addEventListener('mousedown', () => {
+    handleInput();
   });
 
   // Start game
