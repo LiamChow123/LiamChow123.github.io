@@ -40,7 +40,7 @@ const groundBody = new CANNON.Body({
 groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
-// Player (represented by a capsule)
+// Player (represented by a sphere)
 const playerShape = new CANNON.Sphere(0.5); 
 const playerBody = new CANNON.Body({ mass: 70, shape: playerShape });
 playerBody.position.set(0, 5, 0); // Start high to see gravity work
@@ -48,7 +48,7 @@ world.addBody(playerBody);
 
 // Sword (the core mechanic!)
 const swordGeometry = new THREE.BoxGeometry(0.1, 0.1, 1.5);
-const swordMaterial = new THREE.MeshStandardMaterial({ color: 0 C0C0C0 });
+const swordMaterial = new THREE.MeshStandardMaterial({ color: 0xC0C0C0 });
 const swordMesh = new THREE.Mesh(swordGeometry, swordMaterial);
 scene.add(swordMesh);
 
@@ -91,19 +91,30 @@ const keys = {};
 document.addEventListener('keydown', (e) => (keys[e.code] = true));
 document.addEventListener('keyup', (e) => (keys[e.code] = false));
 
-const mouse = new THREE.Vector2();
+let mouseX = 0;
+let mouseY = 0;
 document.addEventListener('mousemove', (e) => {
-    // Normalize mouse position to -1 -> +1
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    if (document.pointerLockElement === renderer.domElement) {
+        mouseX += e.movementX;
+        mouseY += e.movementY;
+    }
 });
 
-// Lock pointer on click
+// Get a reference to the info overlay
 const infoOverlay = document.getElementById('info-overlay');
-infoOverlay.addEventListener('click', () => {
-    renderer.domElement.requestPointerLock();
+
+// --- THIS IS THE UPDATED SECTION ---
+// Start game with 'Enter' key
+window.addEventListener('keydown', (event) => {
+    if (event.code === 'Enter') {
+        // Request pointer lock only if it's not already active
+        if (!document.pointerLockElement) {
+            renderer.domElement.requestPointerLock();
+        }
+    }
 });
 
+// Hides the overlay when pointer lock is active
 document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement === renderer.domElement) {
         infoOverlay.style.display = 'none';
@@ -136,10 +147,9 @@ function animate() {
     if (keys['KeyD']) moveDirection.x += 1;
     moveDirection.normalize().multiplyScalar(moveSpeed);
     
-    // Apply movement relative to camera direction
     const cameraDirection = new THREE.Vector3();
     camera.getWorldDirection(cameraDirection);
-    cameraDirection.y = 0; // Don't move up/down
+    cameraDirection.y = 0;
     cameraDirection.normalize();
     
     const right = new THREE.Vector3().crossVectors(camera.up, cameraDirection).normalize();
@@ -151,38 +161,29 @@ function animate() {
 
     // Jumping
     if (keys['Space']) {
-        // A simple way to check if on ground is to raycast down
-        // For simplicity here, we just allow jumping
-        playerBody.velocity.y = 7; // Jump force
+        playerBody.velocity.y = 7;
     }
 
     // Camera follows player
     camera.position.copy(playerBody.position);
-    camera.position.y += 1.5; // Eye level
+    camera.position.y += 1.5;
 
-    // Mouse Controls Sword
-    if (document.pointerLockElement === renderer.domElement) {
-        camera.rotation.y -= event.movementX * 0.002;
-        camera.rotation.x -= event.movementY * 0.002;
-        camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
-    }
-
-    // Sword Follows Mouse/Camera
-    // This is the magic: The target is positioned in front of the camera
-    swordTarget.position.set(0, -0.2, -2); // Position relative to camera
-    camera.add(swordTarget); // Attach target to camera
+    // Mouse Controls Camera rotation
+    camera.rotation.y = -mouseX * 0.002;
+    camera.rotation.x = -mouseY * 0.002;
+    camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
     
-    // Get world position of the target
+    // Sword Follows Mouse/Camera
+    swordTarget.position.set(0, -0.2, -2);
+    camera.add(swordTarget);
+    
     const targetWorldPosition = new THREE.Vector3();
     swordTarget.getWorldPosition(targetWorldPosition);
 
-    // Make the sword's physics body move towards the target position
-    // This creates the feeling of weight and momentum
     const force = new CANNON.Vec3();
     targetWorldPosition.vsub(swordBody.position, force);
-    force.scale(30, swordBody.velocity); // The '30' is the "strength" of your arm
+    force.scale(30, swordBody.velocity);
 
-    // Also make the sword orient towards the camera direction
     const cameraQuaternion = new CANNON.Quaternion().setFromEuler(camera.rotation.x, camera.rotation.y, 0);
     swordBody.quaternion.slerp(cameraQuaternion, 0.2, swordBody.quaternion);
     
@@ -203,5 +204,4 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Start the game loop
 animate();
