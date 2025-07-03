@@ -2,26 +2,28 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 
 // --- SETUP ---
-// Scene, Camera, Renderer
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x87ceeb); // Sky blue background
+renderer.setClearColor(0x87ceeb);
 camera.position.z = 5;
 camera.position.y = 2;
 
-// Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
 directionalLight.position.set(5, 10, 7.5);
 scene.add(directionalLight);
 
-// Physics World
 const world = new CANNON.World({
-    gravity: new CANNON.Vec3(0, -9.82, 0) // Realistic gravity
+    gravity: new CANNON.Vec3(0, -9.82, 0)
 });
+
+// --- FIX: DEFINE COLLISION GROUPS ---
+const GROUP1 = 1;  // Player
+const GROUP2 = 2;  // Sword
+const GROUP3 = 4;  // Ground, Enemies, etc.
 
 // --- GAME OBJECTS & PHYSICS ---
 const objectsToUpdate = [];
@@ -36,28 +38,39 @@ scene.add(groundMesh);
 const groundBody = new CANNON.Body({
     type: CANNON.Body.STATIC,
     shape: new CANNON.Plane(),
+    collisionFilterGroup: GROUP3, // Belongs to ground group
+    collisionFilterMask: GROUP1 | GROUP2 // Collides with player AND sword
 });
 groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
-// Player (represented by a sphere)
+// Player
 const playerShape = new CANNON.Sphere(0.5); 
-const playerBody = new CANNON.Body({ mass: 70, shape: playerShape });
-playerBody.position.set(0, 5, 0); // Start high to see gravity work
+const playerBody = new CANNON.Body({ 
+    mass: 70, 
+    shape: playerShape,
+    collisionFilterGroup: GROUP1, // Belongs to player group
+    collisionFilterMask: GROUP3  // ONLY collides with ground/enemy group
+});
+playerBody.position.set(0, 5, 0);
 world.addBody(playerBody);
 
-// Sword (the core mechanic!)
+// Sword
 const swordGeometry = new THREE.BoxGeometry(0.1, 0.1, 1.5);
 const swordMaterial = new THREE.MeshStandardMaterial({ color: 0xC0C0C0 });
 const swordMesh = new THREE.Mesh(swordGeometry, swordMaterial);
 scene.add(swordMesh);
 
 const swordShape = new CANNON.Box(new CANNON.Vec3(0.05, 0.05, 0.75));
-const swordBody = new CANNON.Body({ mass: 2, shape: swordShape });
+const swordBody = new CANNON.Body({ 
+    mass: 2, 
+    shape: swordShape,
+    collisionFilterGroup: GROUP2, // Belongs to sword group
+    collisionFilterMask: GROUP3  // ONLY collides with ground/enemy group
+});
 world.addBody(swordBody);
 objectsToUpdate.push({ mesh: swordMesh, body: swordBody });
 
-// A target for the sword to follow (controlled by mouse)
 const swordTarget = new THREE.Object3D();
 scene.add(swordTarget);
 
@@ -68,20 +81,26 @@ const enemyMesh = new THREE.Mesh(enemyGeometry, enemyMaterial);
 scene.add(enemyMesh);
 
 const enemyShape = new CANNON.Box(new CANNON.Vec3(0.5, 1, 0.5));
-const enemyBody = new CANNON.Body({ mass: 50, shape: enemyShape });
+const enemyBody = new CANNON.Body({ 
+    mass: 50, 
+    shape: enemyShape,
+    collisionFilterGroup: GROUP3, // Belongs to ground/enemy group
+    collisionFilterMask: GROUP1 | GROUP2 // Collides with player AND sword
+});
 enemyBody.position.set(0, 1, -5);
 world.addBody(enemyBody);
 objectsToUpdate.push({ mesh: enemyMesh, body: enemyBody });
 
 enemyBody.addEventListener("collide", (event) => {
-    // Check if the collision is with the sword and is strong enough
-    const contact = event.contact;
-    const impactVelocity = contact.getImpactVelocityAlongNormal();
-    
-    if (Math.abs(impactVelocity) > 2) { // Threshold for a "hit"
-        console.log("Enemy Hit!");
-        enemyMesh.material.color.set(0xffff00); // Flash yellow on hit
-        setTimeout(() => enemyMesh.material.color.set(0xff0000), 100);
+    if (event.body === swordBody) { // --- FIX: Check if the collision is specifically with the sword
+        const contact = event.contact;
+        const impactVelocity = contact.getImpactVelocityAlongNormal();
+        
+        if (Math.abs(impactVelocity) > 2) {
+            console.log("Enemy Hit by Sword!");
+            enemyMesh.material.color.set(0xffff00);
+            setTimeout(() => enemyMesh.material.color.set(0xff0000), 100);
+        }
     }
 });
 
@@ -100,21 +119,16 @@ document.addEventListener('mousemove', (e) => {
     }
 });
 
-// Get a reference to the info overlay
 const infoOverlay = document.getElementById('info-overlay');
 
-// --- THIS IS THE UPDATED SECTION ---
-// Start game with 'Enter' key
 window.addEventListener('keydown', (event) => {
     if (event.code === 'Enter') {
-        // Request pointer lock only if it's not already active
         if (!document.pointerLockElement) {
             renderer.domElement.requestPointerLock();
         }
     }
 });
 
-// Hides the overlay when pointer lock is active
 document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement === renderer.domElement) {
         infoOverlay.style.display = 'none';
@@ -122,6 +136,7 @@ document.addEventListener('pointerlockchange', () => {
         infoOverlay.style.display = 'block';
     }
 });
+
 
 // --- GAME LOOP ---
 const clock = new THREE.Clock();
@@ -134,12 +149,10 @@ function animate() {
     const deltaTime = elapsedTime - oldElapsedTime;
     oldElapsedTime = elapsedTime;
 
-    // --- Physics Step ---
     world.step(1 / 60, deltaTime, 3);
 
-    // --- Update Logic ---
     // Player Movement
-    const moveSpeed = keys['ShiftLeft'] ? 8 : 4; // Sprinting
+    const moveSpeed = keys['ShiftLeft'] ? 8 : 4;
     const moveDirection = new THREE.Vector3();
     if (keys['KeyW']) moveDirection.z -= 1;
     if (keys['KeyS']) moveDirection.z += 1;
@@ -159,7 +172,6 @@ function animate() {
     playerBody.velocity.x = finalMove.x;
     playerBody.velocity.z = finalMove.z;
 
-    // Jumping
     if (keys['Space']) {
         playerBody.velocity.y = 7;
     }
@@ -174,7 +186,7 @@ function animate() {
     camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
     
     // Sword Follows Mouse/Camera
-    swordTarget.position.set(0, -0.2, -2);
+    swordTarget.position.set(0.5, -0.4, -1.5); // Position relative to camera (slightly to right and down)
     camera.add(swordTarget);
     
     const targetWorldPosition = new THREE.Vector3();
@@ -184,20 +196,19 @@ function animate() {
     targetWorldPosition.vsub(swordBody.position, force);
     force.scale(30, swordBody.velocity);
 
-    const cameraQuaternion = new CANNON.Quaternion().setFromEuler(camera.rotation.x, camera.rotation.y, 0);
+    // Make sword orient towards camera direction but with a slight lag
+    const cameraQuaternion = new CANNON.Quaternion();
+    camera.getWorldQuaternion(cameraQuaternion);
     swordBody.quaternion.slerp(cameraQuaternion, 0.2, swordBody.quaternion);
     
-    // Update visual meshes to match their physics bodies
     for (const obj of objectsToUpdate) {
         obj.mesh.position.copy(obj.body.position);
         obj.mesh.quaternion.copy(obj.body.quaternion);
     }
 
-    // --- Render ---
     renderer.render(scene, camera);
 }
 
-// Handle window resizing
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
