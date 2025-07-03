@@ -1,296 +1,258 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Crowd Control: Final Cut</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-
-  * { box-sizing: border-box; }
-
-  body {
-    margin: 0;
-    background: #000;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    user-select: none;
-    font-family: 'Press+Start+2P', cursive;
-  }
-
-  canvas {
-    background: linear-gradient(to bottom, #0d1b2a 0%, #000000 100%);
-    display: block;
-    border: 3px solid rgba(0, 191, 255, 0.6);
-    border-radius: 5px;
-    box-shadow: 0 0 40px rgba(0, 191, 255, 0.5), inset 0 0 25px rgba(0, 0, 0, 0.6);
-  }
-
-  #score, #message {
-    text-shadow: 4px 4px 0px #000;
-    background: linear-gradient(to bottom, #fff, #ccc);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  #score { position: absolute; top: 20px; font-size: 32px; }
-  #message { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 28px; text-align: center; white-space: pre; line-height: 1.5; }
-</style>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5203039798099176"
+     crossorigin="anonymous"></script>
+  <meta charset="UTF-8" />
+  <title>Speed Draw Game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom, #1a1a2e, #16213e);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 36px;
+      text-shadow: 0 0 10px cyan;
+    }
+    #startScreen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 30px;
+    }
+    #topicDisplay {
+      font-size: 56px;
+      font-weight: bold;
+      color: #00adb5;
+      text-shadow: 0 0 15px #00adb5;
+      text-align: center;
+      max-width: 90vw;
+    }
+    #info, #tools, #canvas, #timesUp {
+      display: none;
+    }
+    #info {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 15px 25px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      font-size: 18px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+      width: fit-content;
+    }
+    #tools {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 10px 20px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      width: fit-content;
+    }
+    select, input[type="color"], input[type="range"], button {
+      padding: 5px 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+    }
+    button {
+      background: #00adb5;
+      color: white;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      background: #00979e;
+    }
+    canvas {
+      border: 4px solid #fff;
+      border-radius: 10px;
+      background: white;
+      box-shadow: 0 0 20px #000;
+      margin-top: 10px;
+      cursor: crosshair;
+      max-width: 90vw;
+    }
+    #timesUp {
+      font-size: 40px;
+      color: red;
+      font-weight: bold;
+      margin-top: 20px;
+      text-shadow: 0 0 15px red;
+      animation: pulse 1s infinite;
+      display: none;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.7; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
 </head>
 <body>
-<div id="score">Score: 0</div>
-<div id="message">Press Space to Begin</div>
-<canvas id="game" width="450" height="600"></canvas>
-<script>
-(() => {
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const scoreEl = document.getElementById('score');
-  const messageEl = document.getElementById('message');
 
-  const WIDTH = canvas.width, HEIGHT = canvas.height;
-  const lerp = (a, b, t) => a + (b - a) * t;
+  <div id="startScreen">
+    <h1>🎨 Draw</h1>
+    <div id="topicDisplay">Loading...</div>
+    <button id="startButton">Start Game</button>
+  </div>
 
-  const sounds = {
-    thrust: new Audio('https://freesound.org/data/previews/341/341695_62469-lq.mp3'),
-    shatter: new Audio('https://freesound.org/data/previews/405/405423_7853191-lq.mp3'),
-    gunshot: new Audio('https://freesound.org/data/previews/58/58245_599498-lq.mp3'),
-    fail: new Audio('https://freesound.org/data/previews/173/173859_2193233-lq.mp3')
-  };
-  Object.values(sounds).forEach(s => { s.volume = 0.3; s.playbackRate = 1.2; });
-  sounds.shatter.volume = 0.4;
+  <div id="info">
+    <div><strong>Prompt:</strong> <span id="prompt">???</span></div>
+    <div><strong>Time Left:</strong> <span id="timer">60</span>s</div>
+  </div>
 
-  let score, gameState, animationFrame, spawnInterval, spawnTimer, screenShake;
-  let scenery = { stars: [], cityscape: [], nebula: {} };
-  let targets = [], particles = [];
-  const camera = { x: WIDTH / 2, y: HEIGHT / 2, zoom: 1 };
+  <div id="tools">
+    <select id="tool">
+      <option value="brush">Brush</option>
+      <option value="eraser">Eraser</option>
+    </select>
 
-  function initScenery() {
-    for (let i = 0; i < 150; i++) scenery.stars.push({ x: Math.random()*WIDTH, y: Math.random()*HEIGHT, r: Math.random()*1.5, s: Math.random()*0.2+0.1 });
-    for (let i = 0; i < 20; i++) scenery.cityscape.push({ x: i * 30, w: Math.random()*40+20, h: Math.random()*80+20, s: Math.random()*0.2+0.1 });
-    scenery.nebula = { x: WIDTH / 2, y: HEIGHT / 2, r1: 100, r2: 300, angle: 0 };
-  }
+    <label>Color: <input type="color" id="color" value="#000000" /></label>
+    <label>Size: <input type="range" id="size" min="1" max="50" value="5" /></label>
+    <button id="clear">🧼 Clear</button>
+  </div>
 
-  function drawScenery() {
-      // Nebula
-      scenery.nebula.angle += 0.001;
-      const nx = scenery.nebula.x + Math.cos(scenery.nebula.angle) * 50;
-      const ny = scenery.nebula.y + Math.sin(scenery.nebula.angle) * 50;
-      const nebGrad = ctx.createRadialGradient(nx, ny, scenery.nebula.r1, nx, ny, scenery.nebula.r2);
-      nebGrad.addColorStop(0, 'rgba(137, 207, 240, 0.1)'); nebGrad.addColorStop(1, 'rgba(137, 207, 240, 0)');
-      ctx.fillStyle = nebGrad; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  <canvas id="canvas" width="800" height="500"></canvas>
 
-      // Stars
-      ctx.fillStyle = '#FFF';
-      scenery.stars.forEach(s => { s.x -= s.s; if (s.x < -s.r) s.x = WIDTH + s.r; ctx.globalAlpha = s.r/1.5; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 2*Math.PI); ctx.fill(); });
-      
-      // Cityscape
-      const cityGrad = ctx.createLinearGradient(0, HEIGHT, 0, HEIGHT - 100);
-      cityGrad.addColorStop(0, '#070d12'); cityGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = cityGrad;
-      scenery.cityscape.forEach(b => { b.x -= b.s; if(b.x + b.w < 0) b.x = WIDTH; ctx.globalAlpha = 0.8; ctx.fillRect(b.x, HEIGHT - b.h, b.w, b.h); });
-      ctx.globalAlpha = 1;
-  }
-  
-  function drawVignette() {
-      const grad = ctx.createRadialGradient(WIDTH/2, HEIGHT/2, WIDTH/3, WIDTH/2, HEIGHT/2, WIDTH);
-      grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.6)');
-      ctx.fillStyle = grad; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  }
+  <div id="timesUp">⏰ Time's Up!</div>
 
-  const bullet = {
-    startX: 100, x: -40, y: HEIGHT/2, visible: false,
-    w: 35, h: 12, g: 0.35, lift: -7, v: 0, rot: 0,
-    applyThrust() { this.v = this.lift; sounds.thrust.currentTime = 0; sounds.thrust.play(); },
-    update() {
-      if(!this.visible) return;
-      this.v += this.g; this.y += this.v;
-      this.rot = lerp(this.rot, Math.max(-Math.PI/6, Math.min(Math.PI/6, this.v * 0.05)), 0.15);
-      if (this.y < 0 || this.y + this.h > HEIGHT) {
-        sounds.fail.play(); gameState = 'gameover';
-        messageEl.textContent = 'Out of Bounds!\nPress Space to Restart';
-        messageEl.style.display = 'block'; screenShake = 15; this.visible = false;
-      }
-    },
-    draw() {
-      if (!this.visible) return;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.translate(this.x + this.w / 2, this.y + this.h / 2);
-      ctx.rotate(this.rot);
-      ctx.shadowColor = '#fefae0'; ctx.shadowBlur = 20;
-      const grad = ctx.createLinearGradient(0, -this.h/2, 0, this.h);
-      grad.addColorStop(0, '#fff'); grad.addColorStop(0.5, '#ffd700'); grad.addColorStop(1, '#b8860b');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(-this.w/2, -this.h/2); ctx.lineTo(this.w/2-5, -this.h/2);
-      ctx.lineTo(this.w/2, 0); ctx.lineTo(this.w/2-5, this.h/2);
-      ctx.lineTo(-this.w/2, this.h/2); ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-  };
-  
-  const gun = {
-    x: 0, y: 0, w: 110, h: 60, bOffsetY: 23, bTipX: 0, recoil: 0, flash: 0,
-    update() {
-        this.y = lerp(this.y, bullet.y - (this.h - bullet.h) / 2, 0.12);
-        this.recoil = lerp(this.recoil, 0, 0.2);
-        this.bTipX = this.x - this.recoil + this.w - 10;
-    },
-    draw() {
-      const gX = this.x - this.recoil;
-      if(this.flash > 0) {
-        this.flash -= 0.1; ctx.save(); ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = `rgba(255, 223, 0, ${this.flash})`;
-        ctx.beginPath(); ctx.arc(this.bTipX, this.y + this.bOffsetY, 35*this.flash, 0, 2*Math.PI); ctx.fill();
-        ctx.restore();
-      }
-      ctx.fillStyle = '#212529';
-      ctx.beginPath(); ctx.moveTo(gX+20, this.y+30); ctx.lineTo(gX+15, this.y+58); ctx.lineTo(gX+45, this.y+58); ctx.lineTo(gX+40, this.y+30); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#343a40'; ctx.fillRect(gX, this.y, this.w - 10, 32);
-      const bGrad = ctx.createLinearGradient(gX,0,gX+this.w,0);
-      bGrad.addColorStop(0.7, '#495057'); bGrad.addColorStop(1, '#6c757d');
-      ctx.fillStyle = bGrad; ctx.fillRect(gX, this.y + this.bOffsetY - 5, this.w, 10);
-    }
-  };
+  <button id="playAgainBtn" style="display:none; margin-top:20px; padding:10px 20px; font-size:18px; border:none; border-radius:8px; background:#00adb5; color:#fff; cursor:pointer;">Play Again</button>
 
-  const targetRadius = 35, targetSpeed = 3.5;
-  function createTarget(x) {
-    const y = Math.random() * (HEIGHT - targetRadius * 2 - 40) + targetRadius + 20;
-    targets.push({ x: x || WIDTH + targetRadius, y: y, r: targetRadius, active: true });
-  }
-  function drawTarget(t) {
-    ctx.save(); ctx.translate(t.x, t.y);
-    ctx.shadowColor = '#000'; ctx.shadowBlur = 15; ctx.shadowOffsetX = 8; ctx.shadowOffsetY = 8;
-    const colors = ['#d90429', '#fff', '#000', '#fff'];
-    [0.3, 0.6, 0.8, 1].forEach((rad, i) => {
-        ctx.fillStyle = colors[i];
-        ctx.beginPath(); ctx.arc(0, 0, t.r * rad, 0, 2 * Math.PI); ctx.fill();
-    });
-    ctx.restore();
-  }
+  <script>
+    const prompts = [
+      "Cat", "Rainbow", "Tree", "Dragon", "House", "Pizza", "Rocket", "Ghost", "Ocean", "Laptop", "Book", "Flower"
+    ];
 
-  function createShatter(x, y, radius) {
-    sounds.shatter.currentTime = 0; sounds.shatter.play();
-    for (let i = 0; i < 15; i++) {
-        const angle = Math.random() * 2 * Math.PI;
-        const speed = Math.random() * 6 + 2;
-        const size = Math.random() * radius/3 + 5;
-        const shape = [
-            {x: Math.cos(angle) * size, y: Math.sin(angle) * size},
-            {x: Math.cos(angle + 0.1) * size * 0.5, y: Math.sin(angle + 0.1) * size * 0.5},
-            {x: Math.cos(angle - 0.1) * size * 0.7, y: Math.sin(angle - 0.1) * size * 0.7}
-        ];
-        particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, a: 1, rot: 0, rotSpeed: (Math.random()-0.5)*0.2, shape: shape, g: 0.1 });
-    }
-  }
+    const startScreen = document.getElementById("startScreen");
+    const topicDisplay = document.getElementById("topicDisplay");
+    const startButton = document.getElementById("startButton");
+    const info = document.getElementById("info");
+    const tools = document.getElementById("tools");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const promptText = document.getElementById("prompt");
+    const timerDisplay = document.getElementById("timer");
+    const timesUpText = document.getElementById("timesUp");
+    const playAgainBtn = document.getElementById("playAgainBtn");
 
-  function updateAndDrawParticles() {
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i]; p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.rotSpeed; p.a -= 0.02;
-      if (p.a <= 0) particles.splice(i, 1);
-      else {
-          ctx.save(); ctx.globalAlpha = p.a; ctx.fillStyle = '#fff';
-          ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-          ctx.beginPath(); ctx.moveTo(p.shape[0].x, p.shape[0].y);
-          p.shape.forEach(pt => ctx.lineTo(pt.x, pt.y)); ctx.closePath(); ctx.fill();
-          ctx.restore();
-      }
-    }
-    ctx.restore();
-  }
+    const toolSelect = document.getElementById("tool");
+    const colorPicker = document.getElementById("color");
+    const sizeSlider = document.getElementById("size");
+    const clearBtn = document.getElementById("clear");
 
-  function resetGame() {
-    targets = []; particles = []; score = 0;
-    spawnInterval = 100; spawnTimer = spawnInterval;
-    bullet.y = HEIGHT/2; bullet.v = 0; bullet.rot = 0;
-    bullet.x = -bullet.w; bullet.visible = false;
-    gun.y = bullet.y; gun.recoil = 0;
-    gameState = 'start';
-    scoreEl.textContent = 'Score: 0'; messageEl.style.display = 'block';
-    prewarmTargets(); // ** BUG FIX **: Pre-load targets so they exist on frame 1.
-  }
-  
-  function prewarmTargets() {
-      let spawnX = WIDTH + 150;
-      for (let i = 0; i < 5; i++) {
-          createTarget(spawnX);
-          spawnX += Math.random() * 150 + 120;
-      }
-  }
+    let painting = false;
+    let drawingEnabled = false;
+    let timeLeft = 60;
+    let currentPrompt = "";
 
-  function update() {
-    ctx.clearRect(0, 0, WIDTH, HEIGHT);
-    
-    // --- CAMERA AND SCENE SETUP ---
-    ctx.save();
-    if(screenShake > 0) { ctx.translate(Math.random()*screenShake-screenShake/2, Math.random()*screenShake-screenShake/2); screenShake *= 0.9; }
-    camera.zoom = lerp(camera.zoom, 1, 0.1);
-    ctx.translate(camera.x, camera.y); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-camera.x, -camera.y);
-
-    drawScenery();
-    
-    // --- GAME LOGIC ---
-    if (gameState !== 'start') {
-        for (let t of targets) t.x -= targetSpeed;
+    function pickRandomPrompt() {
+      return prompts[Math.floor(Math.random() * prompts.length)];
     }
 
-    if (gameState === 'shooting') {
-        animationFrame++;
-        if (!bullet.visible && animationFrame > 5) bullet.visible = true;
-        if(bullet.visible) bullet.x = lerp(bullet.x, bullet.startX, 0.2);
-        if (bullet.x >= bullet.startX - 1) gameState = 'playing';
-    } else if (gameState === 'playing') {
-      spawnTimer--;
-      if (spawnTimer <= 0) {
-          createTarget(); spawnInterval = Math.max(40, 100 - score * 2); spawnTimer = spawnInterval;
-      }
-      for (let i = targets.length - 1; i >= 0; i--) {
-        const t = targets[i];
-        if (t.active && bullet.visible && Math.hypot(bullet.x + bullet.w/2 - t.x, bullet.y + bullet.h/2 - t.y) < t.r) {
-          score++; scoreEl.textContent = `Score: ${score}`;
-          t.active = false;
-          createShatter(t.x, t.y, t.r);
-          targets.splice(i, 1);
-          screenShake = 8; camera.zoom = 1.03;
-        } else if (t.x + t.r < 0) {
-          sounds.fail.play(); gameState = 'gameover';
-          messageEl.textContent = 'Target Missed!\nPress Space to Restart';
-          messageEl.style.display = 'block'; screenShake = 15;
+    function resetGame() {
+      painting = false;
+      drawingEnabled = false;
+      timeLeft = 60;
+      timerDisplay.textContent = timeLeft;
+      timesUpText.style.display = "none";
+      playAgainBtn.style.display = "none";
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Hide game UI, show start screen and update topic
+      info.style.display = "none";
+      tools.style.display = "none";
+      canvas.style.display = "none";
+      startScreen.style.display = "flex";
+
+      currentPrompt = pickRandomPrompt();
+      topicDisplay.textContent = currentPrompt;
+    }
+
+    function startGame() {
+      startScreen.style.display = "none";
+      info.style.display = "flex";
+      tools.style.display = "flex";
+      canvas.style.display = "block";
+
+      promptText.textContent = currentPrompt;
+      drawingEnabled = true;
+      timeLeft = 60;
+      timerDisplay.textContent = timeLeft;
+
+      const timer = setInterval(() => {
+        timeLeft--;
+        timerDisplay.textContent = timeLeft;
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          drawingEnabled = false;
+          timesUpText.style.display = "block";
+          playAgainBtn.style.display = "inline-block";
         }
-      }
+      }, 1000);
     }
-    
-    // --- DRAWING ---
-    gun.update(); bullet.update();
-    targets.forEach(drawTarget);
-    gun.draw(); bullet.draw();
-    updateAndDrawParticles(); 
-    drawVignette(); ctx.restore();
 
-    requestAnimationFrame(update);
-  }
-
-  function handleInput() {
-    if (gameState === 'start') {
-      sounds.gunshot.play(); gameState = 'shooting'; animationFrame = 0;
-      gun.recoil = 25; gun.flash = 1; screenShake = 12; camera.zoom = 1.05;
-      bullet.x = gun.bTipX; messageEl.style.display = 'none';
-    } else if (gameState === 'playing') {
-      bullet.applyThrust();
-    } else if (gameState === 'gameover') {
-      resetGame();
+    function startDrawing(e) {
+      if (!drawingEnabled) return;
+      painting = true;
+      draw(e);
     }
-  }
 
-  window.addEventListener('keydown', e => { if (e.code==='Space' || e.code==='ArrowUp') { e.preventDefault(); handleInput(); } });
-  window.addEventListener('mousedown', handleInput);
-  
-  initScenery(); resetGame(); update();
-})();
-</script>
+    function stopDrawing() {
+      painting = false;
+      ctx.beginPath();
+    }
+
+    function draw(e) {
+      if (!painting || !drawingEnabled) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      ctx.lineWidth = sizeSlider.value;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = toolSelect.value === "eraser" ? "white" : colorPicker.value;
+
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    }
+
+    clearBtn.addEventListener("click", () => {
+      if (!drawingEnabled) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    canvas.addEventListener("mousedown", startDrawing);
+    canvas.addEventListener("mouseup", stopDrawing);
+    canvas.addEventListener("mouseout", stopDrawing);
+    canvas.addEventListener("mousemove", draw);
+
+    startButton.addEventListener("click", startGame);
+    playAgainBtn.addEventListener("click", resetGame);
+
+    // Initialize on load
+    resetGame();
+  </script>
 </body>
 </html>
