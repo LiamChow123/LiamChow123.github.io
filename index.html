@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Crowd Control: Definitive Edition</title>
+<title>Crowd Control: The Final Cut</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -11,7 +11,7 @@
 
   body {
     margin: 0;
-    background: radial-gradient(circle, #333, #111);
+    background: #000;
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -19,7 +19,6 @@
     height: 100vh;
     user-select: none;
     font-family: 'Press+Start+2P', cursive;
-    color: #fff;
   }
 
   canvas {
@@ -27,31 +26,17 @@
     display: block;
     border: 3px solid rgba(0, 191, 255, 0.6);
     border-radius: 5px;
-    box-shadow:
-      0 0 40px rgba(0, 191, 255, 0.5),
-      inset 0 0 25px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 40px rgba(0, 191, 255, 0.5), inset 0 0 25px rgba(0, 0, 0, 0.6);
   }
 
   #score, #message {
     text-shadow: 4px 4px 0px #000;
+    background: linear-gradient(to bottom, #fff, #bbb);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
-
-  #score {
-    position: absolute;
-    top: 20px;
-    font-size: 32px;
-  }
-
-  #message {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 28px;
-    text-align: center;
-    white-space: pre;
-    line-height: 1.5;
-  }
+  #score { position: absolute; top: 20px; font-size: 32px; }
+  #message { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 28px; text-align: center; white-space: pre; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -65,317 +50,215 @@
   const scoreEl = document.getElementById('score');
   const messageEl = document.getElementById('message');
 
-  const WIDTH = canvas.width;
-  const HEIGHT = canvas.height;
-  
-  const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
+  const WIDTH = canvas.width, HEIGHT = canvas.height;
+  const lerp = (a, b, t) => a + (b - a) * t;
 
-  // --- SOUNDS ---
   const sounds = {
     thrust: new Audio('https://freesound.org/data/previews/341/341695_62469-lq.mp3'),
     hit: new Audio('https://freesound.org/data/previews/253/253174_4103908-lq.mp3'),
     gunshot: new Audio('https://freesound.org/data/previews/58/58245_599498-lq.mp3'),
     fail: new Audio('https://freesound.org/data/previews/173/173859_2193233-lq.mp3')
   };
-  Object.values(sounds).forEach(sound => sound.volume = 0.3);
+  Object.values(sounds).forEach(s => { s.volume = 0.3; s.playbackRate = 1.1; });
   sounds.hit.volume = 0.5;
 
-  // --- GAME STATE & VISUALS ---
-  let score, frames, gameState, animationFrame;
-  let spawnInterval, spawnTimer;
-  let screenShake = 0;
+  let score, gameState, animationFrame, spawnInterval, spawnTimer, screenShake;
+  let backgroundStars = [], cityscape = [], targets = [], particles = [];
+  
+  const camera = { x: WIDTH / 2, y: HEIGHT / 2, zoom: 1 };
 
-  // --- DYNAMIC BACKGROUND & FOREGROUND ---
-  let backgroundStars = [];
-  let cityscape = [];
   function initScenery() {
-      backgroundStars = []; cityscape = [];
-      for (let i = 0; i < 150; i++) {
-          backgroundStars.push({
-              x: Math.random() * WIDTH, y: Math.random() * HEIGHT,
-              radius: Math.random() * 1.5, alpha: Math.random() * 0.7 + 0.2
-          });
-      }
-      for (let i = 0; i < 20; i++) {
-          cityscape.push({
-              x: i * 30,
-              w: Math.random() * 40 + 20,
-              h: Math.random() * 80 + 20,
-              speed: Math.random() * 0.2 + 0.1
-          });
-      }
+      for (let i = 0; i < 150; i++) backgroundStars.push({ x: Math.random() * WIDTH, y: Math.random() * HEIGHT, r: Math.random() * 1.5, a: Math.random() * 0.7 + 0.2 });
+      for (let i = 0; i < 20; i++) cityscape.push({ x: i * 30, w: Math.random() * 40 + 20, h: Math.random() * 80 + 20, s: Math.random() * 0.2 + 0.1 });
   }
 
   function drawScenery() {
-      // Stars
       ctx.fillStyle = '#FFF';
-      backgroundStars.forEach(star => {
-          star.x -= 0.1;
-          if (star.x < 0) star.x = WIDTH;
-          ctx.globalAlpha = star.alpha;
-          ctx.beginPath(); ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2); ctx.fill();
-      });
-
-      // Cityscape Parallax
+      backgroundStars.forEach(s => { s.x -= 0.1; if (s.x < 0) s.x = WIDTH; ctx.globalAlpha = s.a; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 2 * Math.PI); ctx.fill(); });
       const cityGrad = ctx.createLinearGradient(0, HEIGHT, 0, HEIGHT - 100);
-      cityGrad.addColorStop(0, '#111');
-      cityGrad.addColorStop(1, 'transparent');
+      cityGrad.addColorStop(0, '#111'); cityGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = cityGrad;
-      cityscape.forEach(building => {
-          building.x -= building.speed;
-          if(building.x + building.w < 0) building.x = WIDTH;
-          ctx.globalAlpha = 0.8;
-          ctx.fillRect(building.x, HEIGHT - building.h, building.w, building.h);
-      });
+      cityscape.forEach(b => { b.x -= b.s; if(b.x + b.w < 0) b.x = WIDTH; ctx.globalAlpha = 0.8; ctx.fillRect(b.x, HEIGHT - b.h, b.w, b.h); });
       ctx.globalAlpha = 1;
   }
   
-  // --- BULLET (Player) ---
+  function drawVignette() {
+      const grad = ctx.createRadialGradient(WIDTH/2, HEIGHT/2, WIDTH/3, WIDTH/2, HEIGHT/2, WIDTH);
+      grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.5)');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  }
+
   const bullet = {
     startX: 100, x: -40, y: HEIGHT / 2, visible: false,
-    width: 35, height: 12,
-    gravity: 0.3, lift: -6.5, velocity: 0,
-    rotation: 0, targetRotation: 0,
-    applyThrust() {
-      this.velocity = this.lift;
-      sounds.thrust.currentTime = 0; sounds.thrust.play();
-    },
+    w: 35, h: 12, g: 0.3, lift: -6.5, v: 0, rot: 0,
+    applyThrust() { this.v = this.lift; sounds.thrust.currentTime = 0; sounds.thrust.play(); },
     update() {
       if(!this.visible) return;
-      this.velocity += this.gravity;
-      this.y += this.velocity;
-      
-      this.targetRotation = Math.max(-Math.PI / 6, Math.min(Math.PI / 6, this.velocity * 0.06));
-      this.rotation = lerp(this.rotation, this.targetRotation, 0.15);
-
-      if (this.y < 0 || this.y + this.height > HEIGHT) {
-        sounds.fail.play();
-        gameState = 'gameover';
+      this.v += this.g; this.y += this.v;
+      this.rot = lerp(this.rot, Math.max(-Math.PI / 6, Math.min(Math.PI / 6, this.v * 0.06)), 0.15);
+      if (this.y < 0 || this.y + this.h > HEIGHT) {
+        sounds.fail.play(); gameState = 'gameover';
         messageEl.textContent = 'Out of Bounds!\nPress Space to Restart';
-        messageEl.style.display = 'block';
-        screenShake = 15;
-        this.visible = false;
+        messageEl.style.display = 'block'; screenShake = 15; this.visible = false;
       }
     },
     draw() {
       if (!this.visible) return;
       ctx.save();
-      ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
-      ctx.rotate(this.rotation);
-      ctx.shadowColor = '#fefae0';
-      ctx.shadowBlur = 15;
-
-      const grad = ctx.createLinearGradient(0, -this.height/2, 0, this.height);
-      grad.addColorStop(0, '#fefefe'); grad.addColorStop(0.5, '#d4af37'); grad.addColorStop(1, '#b8860b');
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.translate(this.x + this.w / 2, this.y + this.h / 2);
+      ctx.rotate(this.rot);
+      ctx.shadowColor = '#fefae0'; ctx.shadowBlur = 20;
+      const grad = ctx.createLinearGradient(0, -this.h/2, 0, this.h);
+      grad.addColorStop(0, '#fff'); grad.addColorStop(0.5, '#ffd700'); grad.addColorStop(1, '#b8860b');
       ctx.fillStyle = grad;
-
       ctx.beginPath();
-      ctx.moveTo(-this.width/2, -this.height/2); ctx.lineTo(this.width/2 - 5, -this.height/2);
-      ctx.lineTo(this.width/2, 0); ctx.lineTo(this.width/2 - 5, this.height/2);
-      ctx.lineTo(-this.width/2, this.height/2); ctx.closePath();
-      ctx.fill();
+      ctx.moveTo(-this.w/2, -this.h/2); ctx.lineTo(this.w/2 - 5, -this.h/2);
+      ctx.lineTo(this.w/2, 0); ctx.lineTo(this.w/2 - 5, this.h/2);
+      ctx.lineTo(-this.w/2, this.h/2); ctx.closePath(); ctx.fill();
       ctx.restore();
     }
   };
   
-  // --- UPGRADED GUN ---
   const gun = {
-    x: 0, y: 0, targetY: 0,
-    width: 110, height: 60, barrelOffsetY: 23, barrelTipX: 0,
-    recoil: 0, flashOpacity: 0,
+    x: 0, y: 0, w: 110, h: 60, bOffsetY: 23, bTipX: 0,
+    recoil: 0, flash: 0,
     update() {
-        this.targetY = bullet.y - (this.height / 2) + (bullet.height / 2);
-        this.y = lerp(this.y, this.targetY, 0.1);
-        this.recoil = lerp(this.recoil, 0, 0.15);
-        this.barrelTipX = this.x - this.recoil + this.width - 10;
+        this.y = lerp(this.y, bullet.y - (this.h - bullet.h) / 2, 0.12);
+        this.recoil = lerp(this.recoil, 0, 0.2);
+        this.bTipX = this.x - this.recoil + this.w - 10;
     },
     draw() {
-      const gunX = this.x - this.recoil;
-      
-      if(this.flashOpacity > 0) {
-        this.flashOpacity -= 0.1;
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter'; // GLOW EFFECT
-        ctx.fillStyle = `rgba(255, 223, 0, ${this.flashOpacity})`;
-        ctx.beginPath();
-        ctx.arc(this.barrelTipX, this.y + this.barrelOffsetY, 30 * this.flashOpacity, 0, Math.PI * 2);
-        ctx.fill();
+      const gX = this.x - this.recoil;
+      if(this.flash > 0) {
+        this.flash -= 0.1; ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(255, 223, 0, ${this.flash})`;
+        ctx.beginPath(); ctx.arc(this.bTipX, this.y + this.bOffsetY, 35 * this.flash, 0, 2 * Math.PI); ctx.fill();
         ctx.restore();
       }
-      
       ctx.fillStyle = '#212529';
-      ctx.beginPath();
-      ctx.moveTo(gunX + 20, this.y + 30); ctx.lineTo(gunX + 15, this.y + 58);
-      ctx.lineTo(gunX + 45, this.y + 58); ctx.lineTo(gunX + 40, this.y + 30);
-      ctx.closePath(); ctx.fill();
-      
-      ctx.fillStyle = '#343a40';
-      ctx.fillRect(gunX, this.y, this.width - 10, 32);
-      
-      const barrelGrad = ctx.createLinearGradient(gunX,0,gunX+this.width,0);
-      barrelGrad.addColorStop(0.7, '#495057'); barrelGrad.addColorStop(1, '#6c757d');
-      ctx.fillStyle = barrelGrad;
-      ctx.fillRect(gunX, this.y + this.barrelOffsetY - 5, this.width, 10);
+      ctx.beginPath(); ctx.moveTo(gX + 20, this.y + 30); ctx.lineTo(gX + 15, this.y + 58); ctx.lineTo(gX + 45, this.y + 58); ctx.lineTo(gX + 40, this.y + 30); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#343a40'; ctx.fillRect(gX, this.y, this.w - 10, 32);
+      const bGrad = ctx.createLinearGradient(gX,0,gX+this.w,0);
+      bGrad.addColorStop(0.7, '#495057'); bGrad.addColorStop(1, '#6c757d');
+      ctx.fillStyle = bGrad; ctx.fillRect(gX, this.y + this.bOffsetY - 5, this.w, 10);
     }
   };
 
-  // --- TARGET BOARDS ---
-  let targets = [];
-  const targetRadius = 35;
-  const targetSpeed = 3.5;
-
-  function createTarget() {
-    const yPos = Math.random() * (HEIGHT - targetRadius * 2 - 40) + targetRadius + 20;
-    targets.push({ x: WIDTH + targetRadius, y: yPos, radius: targetRadius, hitTimer: 0 });
+  const targetRadius = 35, targetSpeed = 3.5;
+  function createTarget(x) {
+    const y = Math.random() * (HEIGHT - targetRadius * 2 - 40) + targetRadius + 20;
+    targets.push({ x: x || WIDTH + targetRadius, y: y, r: targetRadius, hit: 0 });
   }
-
   function drawTarget(t) {
-    ctx.save();
-    ctx.translate(t.x, t.y);
+    ctx.save(); ctx.translate(t.x, t.y);
     ctx.shadowColor = '#000'; ctx.shadowBlur = 15; ctx.shadowOffsetX = 8; ctx.shadowOffsetY = 8;
-
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, t.radius, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.8, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#d90429'; ctx.beginPath(); ctx.arc(0, 0, t.radius * 0.3, 0, Math.PI * 2); ctx.fill();
-
-    if(t.hitTimer > 0) { // Hit flash
-        ctx.fillStyle = `rgba(255,255,255, ${t.hitTimer/5})`;
-        ctx.beginPath(); ctx.arc(0, 0, t.radius, 0, Math.PI * 2); ctx.fill();
-        t.hitTimer--;
-    }
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, t.r, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, t.r * 0.8, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, t.r * 0.6, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#d90429'; ctx.beginPath(); ctx.arc(0, 0, t.r * 0.3, 0, 2 * Math.PI); ctx.fill();
+    if(t.hit > 0) { ctx.fillStyle = `rgba(255,255,255,${t.hit/5})`; ctx.beginPath(); ctx.arc(0, 0, t.r, 0, 2 * Math.PI); ctx.fill(); t.hit--; }
     ctx.restore();
   }
 
-  // --- PARTICLE SYSTEMS ---
-  let particles = [];
-  function createParticles(x, y, count, color, power, gravity = 0) {
+  function createParticles(x, y, count, color, power, grav = 0) {
     for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * power;
-      particles.push({
-        x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        alpha: 1, size: Math.random() * 3 + 1, color, gravity
-      });
+      const angle = Math.random() * 2 * Math.PI, speed = Math.random() * power;
+      particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, a: 1, s: Math.random() * 3 + 1, c: color, g: grav });
     }
   }
-
   function updateAndDrawParticles() {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter'; // Makes particles glow
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
     for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.vy += p.gravity;
-      p.x += p.vx; p.y += p.vy; p.alpha -= 0.03;
-      if (p.alpha <= 0) particles.splice(i, 1);
-      else {
-        ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, p.size, p.size);
-      }
+      const p = particles[i]; p.vy += p.g; p.x += p.vx; p.y += p.vy; p.a -= 0.03;
+      if (p.a <= 0) particles.splice(i, 1);
+      else { ctx.globalAlpha = p.a; ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, p.s, p.s); }
     }
     ctx.restore();
   }
 
-  // --- GAME MANAGEMENT ---
   function resetGame() {
-    targets = []; particles = [];
-    score = 0; frames = 0;
+    targets = []; particles = []; score = 0;
     spawnInterval = 100; spawnTimer = spawnInterval;
-    bullet.y = HEIGHT / 2; bullet.velocity = 0; bullet.rotation = 0;
-    bullet.x = -bullet.width; bullet.visible = false;
+    bullet.y = HEIGHT / 2; bullet.v = 0; bullet.rot = 0;
+    bullet.x = -bullet.w; bullet.visible = false;
     gun.y = bullet.y; gun.recoil = 0;
     gameState = 'start';
-    scoreEl.textContent = 'Score: 0';
-    messageEl.textContent = 'Press Space to Begin';
-    messageEl.style.display = 'block';
+    scoreEl.textContent = 'Score: 0'; messageEl.style.display = 'block';
+    
+    // ** THE FIX IS HERE **: Pre-load targets so the world is ready on start.
+    prewarmTargets();
   }
 
-  function checkCollision(bull, targ) {
-    const dx = bull.x + bull.width/2 - targ.x;
-    const dy = bull.y + bull.height/2 - targ.y;
-    return Math.sqrt(dx * dx + dy * dy) < targ.radius;
+  function prewarmTargets() {
+      let spawnX = WIDTH + 100;
+      for (let i = 0; i < 5; i++) {
+          createTarget(spawnX);
+          spawnX += Math.random() * 150 + 100;
+      }
   }
 
   function update() {
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
     
+    // --- CAMERA AND SCENE SETUP ---
     ctx.save();
-    if(screenShake > 0) {
-        ctx.translate(Math.random() * screenShake - screenShake / 2, Math.random() * screenShake - screenShake / 2);
-        screenShake *= 0.9;
-    }
+    if(screenShake > 0) { ctx.translate(Math.random()*screenShake-screenShake/2, Math.random()*screenShake-screenShake/2); screenShake *= 0.9; }
+    camera.zoom = lerp(camera.zoom, 1, 0.1);
+    ctx.translate(camera.x, camera.y);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.translate(-camera.x, -camera.y);
 
     drawScenery();
     
-    // Update and draw targets only when not on the absolute start screen
+    // --- GAME LOGIC ---
     if (gameState !== 'start') {
         for (let t of targets) t.x -= targetSpeed;
     }
-    targets.forEach(drawTarget);
-    
-    updateAndDrawParticles();
-    
-    gun.update();
-    bullet.update();
 
-    if (gameState === 'start') {
-      messageEl.style.display = 'block';
-    } else if (gameState === 'shooting') {
-        messageEl.style.display = 'none';
+    if (gameState === 'shooting') {
         animationFrame++;
-        const progress = animationFrame / 20; // Faster launch
-        const easedProgress = Math.sqrt(progress);
-        bullet.x = lerp(gun.barrelTipX, bullet.startX, easedProgress);
-        
-        // Make bullet visible only when it exits the barrel
-        if (bullet.x > gun.barrelTipX) {
-            bullet.visible = true;
-        }
-
-        if (animationFrame > 20) {
-            gameState = 'playing';
-            bullet.x = bullet.startX;
-        }
+        if (!bullet.visible && animationFrame > 5) bullet.visible = true;
+        if(bullet.visible) bullet.x = lerp(bullet.x, bullet.startX, 0.2);
+        if (bullet.x >= bullet.startX - 1) gameState = 'playing';
     } else if (gameState === 'playing') {
-      messageEl.style.display = 'none';
       spawnTimer--;
       if (spawnTimer <= 0) {
-          createTarget();
-          spawnInterval = Math.max(40, 100 - score * 2);
-          spawnTimer = spawnInterval;
+          createTarget(); spawnInterval = Math.max(40, 100 - score * 2); spawnTimer = spawnInterval;
       }
       for (let i = targets.length - 1; i >= 0; i--) {
         const t = targets[i];
-        if (bullet.visible && checkCollision(bullet, t)) {
-          sounds.hit.play();
-          createParticles(t.x, t.y, 70, '#ffc300', 8, 0.1); // Sparks with gravity
-          score++;
+        if (bullet.visible && Math.hypot(bullet.x + bullet.w/2 - t.x, bullet.y + bullet.h/2 - t.y) < t.r) {
+          sounds.hit.play(); createParticles(t.x, t.y, 70, '#ffc300', 8, 0.1); score++;
           scoreEl.textContent = `Score: ${score}`;
-          t.hitTimer = 5; // Start hit flash
-          setTimeout(() => targets.splice(targets.indexOf(t), 1), t.hitTimer * 16);
+          t.hit = 5; setTimeout(() => targets.splice(targets.indexOf(t), 1), 80);
           screenShake = 8;
-          continue;
-        }
-        if (t.x + t.radius < 0) {
+        } else if (t.x + t.r < 0) {
           sounds.fail.play(); gameState = 'gameover';
           messageEl.textContent = 'Target Missed!\nPress Space to Restart';
           messageEl.style.display = 'block'; screenShake = 15;
         }
       }
     }
-
-    gun.draw();
-    bullet.draw();
-
+    
+    // --- DRAWING ---
+    gun.update(); bullet.update();
+    targets.forEach(drawTarget);
+    gun.draw(); bullet.draw();
+    updateAndDrawParticles(); 
+    drawVignette(); 
     ctx.restore();
+
     requestAnimationFrame(update);
   }
 
   function handleInput() {
     if (gameState === 'start') {
       sounds.gunshot.play(); gameState = 'shooting'; animationFrame = 0;
-      gun.recoil = 25; gun.flashOpacity = 1; screenShake = 12;
-      createParticles(gun.barrelTipX, gun.y + gun.barrelOffsetY, 40, '#ffc300', 12);
+      gun.recoil = 25; gun.flash = 1; screenShake = 12; camera.zoom = 1.05;
+      bullet.x = gun.bTipX;
+      messageEl.style.display = 'none';
+      createParticles(gun.bTipX, gun.y + gun.bOffsetY, 40, '#ffc300', 12);
     } else if (gameState === 'playing') {
       bullet.applyThrust();
     } else if (gameState === 'gameover') {
@@ -383,7 +266,7 @@
     }
   }
 
-  window.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); handleInput(); } });
+  window.addEventListener('keydown', e => { if (e.code==='Space' || e.code==='ArrowUp') { e.preventDefault(); handleInput(); } });
   window.addEventListener('mousedown', handleInput);
   
   initScenery();
