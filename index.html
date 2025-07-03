@@ -3,30 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>osu! Aim Trainer</title>
+    <title>Pro osu! Aim Trainer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@700&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
             background-color: #1a252f;
             color: #ecf0f1;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Titillium Web', 'Segoe UI', sans-serif;
             overflow: hidden;
+            cursor: none; /* Hide default cursor */
         }
         #game-container {
             position: relative;
             box-shadow: 0 0 25px rgba(0,0,0,0.6);
             border-radius: 8px;
+            transition: transform 0.1s ease-out;
+        }
+        #game-container.shake {
+            animation: shake 0.3s;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
         }
         canvas {
             display: block;
-            background-color: #2c3e50;
-            cursor: crosshair;
             border-radius: 8px;
+        }
+        #gameCanvas {
+            background-color: #2c3e50;
+            z-index: 1;
+        }
+        #cursorCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 5;
+            pointer-events: none; /* Allows clicks to pass through to the game canvas */
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 6;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+        #score-display {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            font-size: 2em;
+        }
+        #combo-display {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            font-size: 4em;
+        }
+         #timer-display {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 2em;
         }
         #settings, #results-screen {
             position: absolute;
@@ -34,7 +83,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(44, 62, 80, 0.95);
+            background-color: rgba(44, 62, 80, 0.97);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -42,280 +91,338 @@
             text-align: center;
             z-index: 10;
             border-radius: 8px;
+            cursor: default; /* Show cursor on menus */
         }
-        #results-screen {
-            display: none; /* Hidden by default */
-        }
+        #results-screen { display: none; }
         .panel-content {
             background-color: #34495e;
             padding: 30px 40px;
             border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
         }
-        h1, h2 {
-            margin-top: 0;
-        }
-        .setting {
-            margin: 20px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 350px;
-        }
-        input[type="range"] {
-            width: 200px;
-        }
+        h1, h2 { margin-top: 0; letter-spacing: 1px; }
+        .setting { margin: 20px 0; display: flex; justify-content: space-between; align-items: center; width: 400px; }
+        input[type="range"] { width: 220px; }
         button {
-            padding: 15px 30px;
-            font-size: 1.2em;
-            font-weight: bold;
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            background-color: #3498db;
-            color: white;
-            transition: background-color 0.3s;
-            margin-top: 20px;
+            padding: 15px 30px; font-size: 1.2em; font-weight: bold; cursor: pointer; border: none;
+            border-radius: 5px; background-color: #e74c3c; color: white;
+            transition: background-color 0.3s, transform 0.1s; margin-top: 20px;
         }
-        button:hover {
-            background-color: #2980b9;
-        }
-        #results-stats {
-            font-size: 1.5em;
-            line-height: 1.8;
-        }
+        button:hover { background-color: #c0392b; }
+        button:active { transform: scale(0.95); }
+        #results-stats { font-size: 1.5em; line-height: 1.8; text-align: left; }
     </style>
 </head>
 <body>
-
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
-
-        <!-- SETTINGS PANEL -->
+        <canvas id="cursorCanvas"></canvas>
+        <div id="ui-layer">
+            <div id="score-display">0</div>
+            <div id="timer-display">60</div>
+            <div id="combo-display">0x</div>
+        </div>
         <div id="settings">
             <div class="panel-content">
-                <h1>Aim Trainer</h1>
+                <h1>Pro Aim Trainer</h1>
                 <div class="setting">
                     <label for="size-slider">Circle Size (CS):</label>
                     <input type="range" id="size-slider" min="10" max="60" value="35">
                     <span id="size-value">35</span>
                 </div>
                 <div class="setting">
-                    <label for="spawn-slider">Spawn Rate:</label>
-                    <input type="range" id="spawn-slider" min="15" max="100" value="60" step="5">
-                    <span id="spawn-value">60</span>
+                    <label for="ar-slider">Approach Rate (AR):</label>
+                    <input type="range" id="ar-slider" min="50" max="250" value="120" step="10">
+                    <span id="ar-value">120</span>
                 </div>
                 <div class="setting">
-                    <label for="lifespan-slider">Target Lifespan:</label>
-                    <input type="range" id="lifespan-slider" min="50" max="200" value="120" step="10">
-                    <span id="lifespan-value">120</span>
+                    <label for="density-slider">Target Density:</label>
+                    <input type="range" id="density-slider" min="15" max="100" value="60" step="5">
+                    <span id="density-value">60</span>
                 </div>
-                <button id="start-button">Start Training (60s)</button>
+                <button id="start-button">Start Training</button>
             </div>
         </div>
-
-        <!-- RESULTS SCREEN -->
         <div id="results-screen">
-             <div class="panel-content">
+            <div class="panel-content">
                 <h2>Session Complete!</h2>
                 <div id="results-stats">
+                    <p>Score: <span id="res-score">0</span></p>
                     <p>Hits: <span id="res-hits">0</span></p>
                     <p>Misses: <span id="res-misses">0</span></p>
+                    <p>Max Combo: <span id="res-max-combo">0</span></p>
                     <p>Accuracy: <span id="res-accuracy">0.00%</span></p>
                 </div>
                 <button id="restart-button">Train Again</button>
             </div>
         </div>
     </div>
-
+    <audio id="hit-sound" src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA" preload="auto"></audio>
+    <audio id="miss-sound" src="data:audio/wav;base64,UklGRkIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAAA" preload="auto"></audio>
     <script>
         // DOM Elements
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('game-container');
+        const gameCanvas = document.getElementById('gameCanvas');
+        const gctx = gameCanvas.getContext('2d');
+        const cursorCanvas = document.getElementById('cursorCanvas');
+        const cctx = cursorCanvas.getContext('2d');
         const settingsPanel = document.getElementById('settings');
         const resultsScreen = document.getElementById('results-screen');
         const startButton = document.getElementById('start-button');
         const restartButton = document.getElementById('restart-button');
-        
-        const sizeSlider = document.getElementById('size-slider');
-        const spawnSlider = document.getElementById('spawn-slider');
-        const lifespanSlider = document.getElementById('lifespan-slider');
+        const scoreDisplay = document.getElementById('score-display');
+        const comboDisplay = document.getElementById('combo-display');
+        const timerDisplay = document.getElementById('timer-display');
+        const hitSound = document.getElementById('hit-sound');
+        const missSound = document.getElementById('miss-sound');
 
-        const sizeValue = document.getElementById('size-value');
-        const spawnValue = document.getElementById('spawn-value');
-        const lifespanValue = document.getElementById('lifespan-value');
-
-        // Game State
-        let circles = [];
-        let hits = 0;
-        let misses = 0;
-        let totalClicks = 0;
-        let isPlaying = false;
-        let spawnTimer = 0;
-        let gameTimer = 0;
+        // Game State & Settings
+        let circles = [], particles = [], cursorPoints = [];
+        let score = 0, combo = 0, maxCombo = 0, hits = 0, misses = 0, totalClicks = 0;
+        let isPlaying = false, spawnTimer = 0, gameTimer = 0, hitCounter = 1;
         let sessionInterval;
+        let settings = {};
 
-        // Game Settings
-        const SESSION_DURATION = 60; // in seconds
-        let settings = {
-            circleSize: parseInt(sizeSlider.value),
-            spawnRate: parseInt(spawnSlider.value),
-            lifespan: parseInt(lifespanSlider.value)
-        };
-
-        // Represents a single target
+        // Classes
         class Circle {
             constructor() {
                 this.radius = settings.circleSize;
-                const margin = this.radius;
-                this.x = Math.random() * (canvas.width - margin * 2) + margin;
-                this.y = Math.random() * (canvas.height - margin * 2) + margin;
-                this.life = settings.lifespan;
-                this.maxLife = settings.lifespan;
+                this.x = Math.random() * (gameCanvas.width - this.radius * 2) + this.radius;
+                this.y = Math.random() * (gameCanvas.height - this.radius * 2) + this.radius;
+                this.life = settings.approachRate;
+                this.maxLife = settings.approachRate;
+                this.number = hitCounter++;
+                this.color = `hsl(${this.number * 15}, 80%, 60%)`;
             }
             draw() {
-                const opacity = this.life / this.maxLife;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(52, 152, 219, ${opacity})`;
-                ctx.fill();
+                const approachRadius = this.radius + (this.radius * (this.life / this.maxLife));
+                gctx.globalAlpha = 0.8;
+                // Approach Circle
+                gctx.beginPath();
+                gctx.arc(this.x, this.y, approachRadius, 0, Math.PI * 2);
+                gctx.strokeStyle = this.color;
+                gctx.lineWidth = 4;
+                gctx.stroke();
+                // Main Circle
+                gctx.beginPath();
+                gctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                gctx.fillStyle = this.color;
+                gctx.fill();
+                // Number
+                gctx.globalAlpha = 1.0;
+                gctx.fillStyle = 'white';
+                gctx.font = `bold ${this.radius * 0.8}px 'Titillium Web'`;
+                gctx.textAlign = 'center';
+                gctx.textBaseline = 'middle';
+                gctx.fillText(this.number, this.x, this.y);
+            }
+            update() { this.life--; }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y; this.color = color;
+                this.radius = Math.random() * 6 + 2;
+                this.angle = Math.random() * Math.PI * 2;
+                this.speed = Math.random() * 4 + 1;
+                this.alpha = 1;
+                this.decay = 0.02;
             }
             update() {
-                this.life--;
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed;
+                this.alpha -= this.decay;
+            }
+            draw() {
+                gctx.globalAlpha = this.alpha;
+                gctx.fillStyle = this.color;
+                gctx.beginPath();
+                gctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                gctx.fill();
             }
         }
-
+        
+        // Utility Functions
         function resizeCanvas() {
-            canvas.width = Math.min(window.innerWidth * 0.9, 1280);
-            canvas.height = Math.min(window.innerHeight * 0.9, 720);
+            const size = Math.min(window.innerWidth * 0.9, 1280);
+            gameCanvas.width = size;
+            gameCanvas.height = size * (9/16);
+            cursorCanvas.width = gameCanvas.width;
+            cursorCanvas.height = gameCanvas.height;
+            if(!isPlaying) drawSettingsMessage();
         }
 
-        function spawnCircle() {
-            circles.push(new Circle());
+        function playSound(sound) {
+            sound.currentTime = 0;
+            sound.play();
         }
 
+        function triggerScreenShake() {
+            gameContainer.classList.add('shake');
+            setTimeout(() => gameContainer.classList.remove('shake'), 300);
+        }
+
+        // Game Logic
         function startGame() {
-            // Reset stats
-            hits = 0;
-            misses = 0;
-            totalClicks = 0;
-            circles = [];
+            updateSettingsFromUI();
+            score = 0, combo = 0, maxCombo = 0, hits = 0, misses = 0, totalClicks = 0, hitCounter = 1;
+            circles = [], particles = [], cursorPoints = [];
             isPlaying = true;
-            gameTimer = SESSION_DURATION;
-            
+            gameTimer = 60;
             settingsPanel.style.display = 'none';
             resultsScreen.style.display = 'none';
-            
-            // Start the session countdown
             sessionInterval = setInterval(() => {
                 gameTimer--;
-                if (gameTimer <= 0) {
-                    endGame();
-                }
+                timerDisplay.textContent = gameTimer;
+                if (gameTimer <= 0) endGame();
             }, 1000);
-            
+            updateUI();
             gameLoop();
         }
 
         function endGame() {
             isPlaying = false;
             clearInterval(sessionInterval);
-            
-            // Show results
+            document.getElementById('res-score').textContent = score;
             document.getElementById('res-hits').textContent = hits;
             document.getElementById('res-misses').textContent = misses;
+            document.getElementById('res-max-combo').textContent = maxCombo;
             const accuracy = totalClicks > 0 ? (hits / totalClicks) * 100 : 0;
             document.getElementById('res-accuracy').textContent = `${accuracy.toFixed(2)}%`;
-            
             resultsScreen.style.display = 'flex';
         }
-        
+
         function handleCanvasClick(event) {
             if (!isPlaying) return;
-
-            const rect = canvas.getBoundingClientRect();
+            totalClicks++;
+            const rect = gameCanvas.getBoundingClientRect();
             const x = event.clientX - rect.left;
             const y = event.clientY - rect.top;
             let hit = false;
-            totalClicks++;
-
             for (let i = circles.length - 1; i >= 0; i--) {
                 const circle = circles[i];
                 const distance = Math.sqrt((x - circle.x)**2 + (y - circle.y)**2);
                 if (distance <= circle.radius) {
+                    playSound(hitSound);
                     hits++;
+                    combo++;
+                    score += 300 * combo;
+                    if (combo > maxCombo) maxCombo = combo;
+                    for(let j = 0; j < 15; j++) particles.push(new Particle(circle.x, circle.y, circle.color));
                     circles.splice(i, 1);
                     hit = true;
                     break;
                 }
             }
+            if (!hit) {
+                playSound(missSound);
+                triggerScreenShake();
+                combo = 0;
+            }
+            updateUI();
         }
 
-        function drawUI() {
-            ctx.fillStyle = 'white';
-            ctx.font = '24px Segoe UI';
-            ctx.textAlign = 'left';
-            ctx.fillText(`Hits: ${hits}`, 20, 40);
-            ctx.textAlign = 'center';
-            ctx.font = '32px Segoe UI';
-            ctx.fillText(`Time: ${gameTimer}`, canvas.width / 2, 45);
-            ctx.textAlign = 'right';
-            ctx.font = '24px Segoe UI';
-            const accuracy = totalClicks > 0 ? (hits / totalClicks) * 100 : 0;
-            ctx.fillText(`Acc: ${accuracy.toFixed(1)}%`, canvas.width - 20, 40);
+        function updateUI() {
+            scoreDisplay.textContent = score;
+            comboDisplay.textContent = `${combo}x`;
+            timerDisplay.textContent = gameTimer;
         }
 
-        // The main game loop
+        // Drawing & Main Loop
+        function drawCursor(x, y) {
+            cctx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+            cursorPoints.push({ x, y });
+            if (cursorPoints.length > 20) cursorPoints.shift();
+            // Draw Trail
+            cctx.lineWidth = 3;
+            cctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            for (let i = 1; i < cursorPoints.length; i++) {
+                cctx.globalAlpha = i / cursorPoints.length;
+                cctx.beginPath();
+                cctx.moveTo(cursorPoints[i-1].x, cursorPoints[i-1].y);
+                cctx.lineTo(cursorPoints[i].x, cursorPoints[i].y);
+                cctx.stroke();
+            }
+            // Draw Cursor
+            cctx.globalAlpha = 1;
+            cctx.fillStyle = '#e74c3c';
+            cctx.beginPath();
+            cctx.arc(x, y, 5, 0, Math.PI * 2);
+            cctx.fill();
+        }
+
+        function drawSettingsMessage() {
+            gctx.clearRect(0,0,gameCanvas.width, gameCanvas.height);
+            gctx.fillStyle = 'rgba(255,255,255,0.7)';
+            gctx.font = "24px 'Titillium Web'";
+            gctx.textAlign = 'center';
+            gctx.fillText("Adjust settings and press Start", gameCanvas.width / 2, gameCanvas.height / 2);
+        }
+
         function gameLoop() {
             if (!isPlaying) return;
+            gctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Spawn logic
             spawnTimer--;
             if (spawnTimer <= 0) {
-                spawnCircle();
-                spawnTimer = settings.spawnRate;
+                circles.push(new Circle());
+                spawnTimer = settings.density;
             }
 
-            // Update and draw circles
-            for (let i = circles.length - 1; i >= 0; i--) {
-                const circle = circles[i];
-                circle.update();
-                if (circle.life <= 0) {
-                    misses++;
+            [...circles, ...particles].forEach((obj, i) => {
+                obj.update();
+                obj.draw();
+                if (obj instanceof Circle && obj.life <= 0) {
+                    misses++; combo = 0;
                     circles.splice(i, 1);
-                    continue;
+                    updateUI();
                 }
-                circle.draw();
-            }
-
-            drawUI();
+                if (obj instanceof Particle && obj.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            });
+            gctx.globalAlpha = 1;
             requestAnimationFrame(gameLoop);
         }
+        
+        // Settings UI Handling
+        const sliders = {
+            size: document.getElementById('size-slider'),
+            ar: document.getElementById('ar-slider'),
+            density: document.getElementById('density-slider')
+        };
+        const values = {
+            size: document.getElementById('size-value'),
+            ar: document.getElementById('ar-value'),
+            density: document.getElementById('density-value')
+        };
 
+        function updateSettingsFromUI() {
+            settings.circleSize = parseInt(sliders.size.value);
+            settings.approachRate = parseInt(sliders.ar.value);
+            settings.density = parseInt(sliders.density.value);
+        }
+
+        for (const key in sliders) {
+            sliders[key].addEventListener('input', e => {
+                values[key].textContent = e.target.value;
+            });
+        }
+        
         // Event Listeners
         window.addEventListener('resize', resizeCanvas);
         startButton.addEventListener('click', startGame);
         restartButton.addEventListener('click', () => {
             resultsScreen.style.display = 'none';
             settingsPanel.style.display = 'flex';
+            drawSettingsMessage();
         });
-        canvas.addEventListener('mousedown', handleCanvasClick);
-
-        // Slider listeners to update values and settings object
-        sizeSlider.addEventListener('input', e => {
-            settings.circleSize = parseInt(e.target.value);
-            sizeValue.textContent = e.target.value;
+        document.addEventListener('mousemove', e => {
+            const rect = gameCanvas.getBoundingClientRect();
+            drawCursor(e.clientX - rect.left, e.clientY - rect.top);
         });
-        spawnSlider.addEventListener('input', e => {
-            settings.spawnRate = parseInt(e.target.value);
-            spawnValue.textContent = e.target.value;
-        });
-        lifespanSlider.addEventListener('input', e => {
-            settings.lifespan = parseInt(e.target.value);
-            lifespanValue.textContent = e.target.value;
-        });
-
+        gameCanvas.addEventListener('mousedown', handleCanvasClick);
+        
         // Initial Setup
         resizeCanvas();
     </script>
