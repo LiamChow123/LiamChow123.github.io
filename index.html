@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Crowd Control: The Final Cut</title>
+<title>Crowd Control: Final Cut</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -22,7 +22,7 @@
   }
 
   canvas {
-    background: linear-gradient(to bottom, #141e30 0%, #000000 100%);
+    background: linear-gradient(to bottom, #0d1b2a 0%, #000000 100%);
     display: block;
     border: 3px solid rgba(0, 191, 255, 0.6);
     border-radius: 5px;
@@ -31,7 +31,7 @@
 
   #score, #message {
     text-shadow: 4px 4px 0px #000;
-    background: linear-gradient(to bottom, #fff, #bbb);
+    background: linear-gradient(to bottom, #fff, #ccc);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
@@ -55,47 +55,59 @@
 
   const sounds = {
     thrust: new Audio('https://freesound.org/data/previews/341/341695_62469-lq.mp3'),
-    hit: new Audio('https://freesound.org/data/previews/253/253174_4103908-lq.mp3'),
+    shatter: new Audio('https://freesound.org/data/previews/405/405423_7853191-lq.mp3'),
     gunshot: new Audio('https://freesound.org/data/previews/58/58245_599498-lq.mp3'),
     fail: new Audio('https://freesound.org/data/previews/173/173859_2193233-lq.mp3')
   };
-  Object.values(sounds).forEach(s => { s.volume = 0.3; s.playbackRate = 1.1; });
-  sounds.hit.volume = 0.5;
+  Object.values(sounds).forEach(s => { s.volume = 0.3; s.playbackRate = 1.2; });
+  sounds.shatter.volume = 0.4;
 
   let score, gameState, animationFrame, spawnInterval, spawnTimer, screenShake;
-  let backgroundStars = [], cityscape = [], targets = [], particles = [];
-  
+  let scenery = { stars: [], cityscape: [], nebula: {} };
+  let targets = [], particles = [];
   const camera = { x: WIDTH / 2, y: HEIGHT / 2, zoom: 1 };
 
   function initScenery() {
-      for (let i = 0; i < 150; i++) backgroundStars.push({ x: Math.random() * WIDTH, y: Math.random() * HEIGHT, r: Math.random() * 1.5, a: Math.random() * 0.7 + 0.2 });
-      for (let i = 0; i < 20; i++) cityscape.push({ x: i * 30, w: Math.random() * 40 + 20, h: Math.random() * 80 + 20, s: Math.random() * 0.2 + 0.1 });
+    for (let i = 0; i < 150; i++) scenery.stars.push({ x: Math.random()*WIDTH, y: Math.random()*HEIGHT, r: Math.random()*1.5, s: Math.random()*0.2+0.1 });
+    for (let i = 0; i < 20; i++) scenery.cityscape.push({ x: i * 30, w: Math.random()*40+20, h: Math.random()*80+20, s: Math.random()*0.2+0.1 });
+    scenery.nebula = { x: WIDTH / 2, y: HEIGHT / 2, r1: 100, r2: 300, angle: 0 };
   }
 
   function drawScenery() {
+      // Nebula
+      scenery.nebula.angle += 0.001;
+      const nx = scenery.nebula.x + Math.cos(scenery.nebula.angle) * 50;
+      const ny = scenery.nebula.y + Math.sin(scenery.nebula.angle) * 50;
+      const nebGrad = ctx.createRadialGradient(nx, ny, scenery.nebula.r1, nx, ny, scenery.nebula.r2);
+      nebGrad.addColorStop(0, 'rgba(137, 207, 240, 0.1)'); nebGrad.addColorStop(1, 'rgba(137, 207, 240, 0)');
+      ctx.fillStyle = nebGrad; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      // Stars
       ctx.fillStyle = '#FFF';
-      backgroundStars.forEach(s => { s.x -= 0.1; if (s.x < 0) s.x = WIDTH; ctx.globalAlpha = s.a; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 2 * Math.PI); ctx.fill(); });
+      scenery.stars.forEach(s => { s.x -= s.s; if (s.x < -s.r) s.x = WIDTH + s.r; ctx.globalAlpha = s.r/1.5; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 2*Math.PI); ctx.fill(); });
+      
+      // Cityscape
       const cityGrad = ctx.createLinearGradient(0, HEIGHT, 0, HEIGHT - 100);
-      cityGrad.addColorStop(0, '#111'); cityGrad.addColorStop(1, 'transparent');
+      cityGrad.addColorStop(0, '#070d12'); cityGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = cityGrad;
-      cityscape.forEach(b => { b.x -= b.s; if(b.x + b.w < 0) b.x = WIDTH; ctx.globalAlpha = 0.8; ctx.fillRect(b.x, HEIGHT - b.h, b.w, b.h); });
+      scenery.cityscape.forEach(b => { b.x -= b.s; if(b.x + b.w < 0) b.x = WIDTH; ctx.globalAlpha = 0.8; ctx.fillRect(b.x, HEIGHT - b.h, b.w, b.h); });
       ctx.globalAlpha = 1;
   }
   
   function drawVignette() {
       const grad = ctx.createRadialGradient(WIDTH/2, HEIGHT/2, WIDTH/3, WIDTH/2, HEIGHT/2, WIDTH);
-      grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.5)');
+      grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.6)');
       ctx.fillStyle = grad; ctx.fillRect(0, 0, WIDTH, HEIGHT);
   }
 
   const bullet = {
-    startX: 100, x: -40, y: HEIGHT / 2, visible: false,
-    w: 35, h: 12, g: 0.3, lift: -6.5, v: 0, rot: 0,
+    startX: 100, x: -40, y: HEIGHT/2, visible: false,
+    w: 35, h: 12, g: 0.35, lift: -7, v: 0, rot: 0,
     applyThrust() { this.v = this.lift; sounds.thrust.currentTime = 0; sounds.thrust.play(); },
     update() {
       if(!this.visible) return;
       this.v += this.g; this.y += this.v;
-      this.rot = lerp(this.rot, Math.max(-Math.PI / 6, Math.min(Math.PI / 6, this.v * 0.06)), 0.15);
+      this.rot = lerp(this.rot, Math.max(-Math.PI/6, Math.min(Math.PI/6, this.v * 0.05)), 0.15);
       if (this.y < 0 || this.y + this.h > HEIGHT) {
         sounds.fail.play(); gameState = 'gameover';
         messageEl.textContent = 'Out of Bounds!\nPress Space to Restart';
@@ -113,16 +125,15 @@
       grad.addColorStop(0, '#fff'); grad.addColorStop(0.5, '#ffd700'); grad.addColorStop(1, '#b8860b');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.moveTo(-this.w/2, -this.h/2); ctx.lineTo(this.w/2 - 5, -this.h/2);
-      ctx.lineTo(this.w/2, 0); ctx.lineTo(this.w/2 - 5, this.h/2);
+      ctx.moveTo(-this.w/2, -this.h/2); ctx.lineTo(this.w/2-5, -this.h/2);
+      ctx.lineTo(this.w/2, 0); ctx.lineTo(this.w/2-5, this.h/2);
       ctx.lineTo(-this.w/2, this.h/2); ctx.closePath(); ctx.fill();
       ctx.restore();
     }
   };
   
   const gun = {
-    x: 0, y: 0, w: 110, h: 60, bOffsetY: 23, bTipX: 0,
-    recoil: 0, flash: 0,
+    x: 0, y: 0, w: 110, h: 60, bOffsetY: 23, bTipX: 0, recoil: 0, flash: 0,
     update() {
         this.y = lerp(this.y, bullet.y - (this.h - bullet.h) / 2, 0.12);
         this.recoil = lerp(this.recoil, 0, 0.2);
@@ -133,11 +144,11 @@
       if(this.flash > 0) {
         this.flash -= 0.1; ctx.save(); ctx.globalCompositeOperation = 'lighter';
         ctx.fillStyle = `rgba(255, 223, 0, ${this.flash})`;
-        ctx.beginPath(); ctx.arc(this.bTipX, this.y + this.bOffsetY, 35 * this.flash, 0, 2 * Math.PI); ctx.fill();
+        ctx.beginPath(); ctx.arc(this.bTipX, this.y + this.bOffsetY, 35*this.flash, 0, 2*Math.PI); ctx.fill();
         ctx.restore();
       }
       ctx.fillStyle = '#212529';
-      ctx.beginPath(); ctx.moveTo(gX + 20, this.y + 30); ctx.lineTo(gX + 15, this.y + 58); ctx.lineTo(gX + 45, this.y + 58); ctx.lineTo(gX + 40, this.y + 30); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(gX+20, this.y+30); ctx.lineTo(gX+15, this.y+58); ctx.lineTo(gX+45, this.y+58); ctx.lineTo(gX+40, this.y+30); ctx.closePath(); ctx.fill();
       ctx.fillStyle = '#343a40'; ctx.fillRect(gX, this.y, this.w - 10, 32);
       const bGrad = ctx.createLinearGradient(gX,0,gX+this.w,0);
       bGrad.addColorStop(0.7, '#495057'); bGrad.addColorStop(1, '#6c757d');
@@ -148,31 +159,46 @@
   const targetRadius = 35, targetSpeed = 3.5;
   function createTarget(x) {
     const y = Math.random() * (HEIGHT - targetRadius * 2 - 40) + targetRadius + 20;
-    targets.push({ x: x || WIDTH + targetRadius, y: y, r: targetRadius, hit: 0 });
+    targets.push({ x: x || WIDTH + targetRadius, y: y, r: targetRadius, active: true });
   }
   function drawTarget(t) {
     ctx.save(); ctx.translate(t.x, t.y);
     ctx.shadowColor = '#000'; ctx.shadowBlur = 15; ctx.shadowOffsetX = 8; ctx.shadowOffsetY = 8;
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, t.r, 0, 2 * Math.PI); ctx.fill();
-    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, t.r * 0.8, 0, 2 * Math.PI); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, t.r * 0.6, 0, 2 * Math.PI); ctx.fill();
-    ctx.fillStyle = '#d90429'; ctx.beginPath(); ctx.arc(0, 0, t.r * 0.3, 0, 2 * Math.PI); ctx.fill();
-    if(t.hit > 0) { ctx.fillStyle = `rgba(255,255,255,${t.hit/5})`; ctx.beginPath(); ctx.arc(0, 0, t.r, 0, 2 * Math.PI); ctx.fill(); t.hit--; }
+    const colors = ['#d90429', '#fff', '#000', '#fff'];
+    [0.3, 0.6, 0.8, 1].forEach((rad, i) => {
+        ctx.fillStyle = colors[i];
+        ctx.beginPath(); ctx.arc(0, 0, t.r * rad, 0, 2 * Math.PI); ctx.fill();
+    });
     ctx.restore();
   }
 
-  function createParticles(x, y, count, color, power, grav = 0) {
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * 2 * Math.PI, speed = Math.random() * power;
-      particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, a: 1, s: Math.random() * 3 + 1, c: color, g: grav });
+  function createShatter(x, y, radius) {
+    sounds.shatter.currentTime = 0; sounds.shatter.play();
+    for (let i = 0; i < 15; i++) {
+        const angle = Math.random() * 2 * Math.PI;
+        const speed = Math.random() * 6 + 2;
+        const size = Math.random() * radius/3 + 5;
+        const shape = [
+            {x: Math.cos(angle) * size, y: Math.sin(angle) * size},
+            {x: Math.cos(angle + 0.1) * size * 0.5, y: Math.sin(angle + 0.1) * size * 0.5},
+            {x: Math.cos(angle - 0.1) * size * 0.7, y: Math.sin(angle - 0.1) * size * 0.7}
+        ];
+        particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, a: 1, rot: 0, rotSpeed: (Math.random()-0.5)*0.2, shape: shape, g: 0.1 });
     }
   }
+
   function updateAndDrawParticles() {
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i]; p.vy += p.g; p.x += p.vx; p.y += p.vy; p.a -= 0.03;
+      const p = particles[i]; p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.rotSpeed; p.a -= 0.02;
       if (p.a <= 0) particles.splice(i, 1);
-      else { ctx.globalAlpha = p.a; ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, p.s, p.s); }
+      else {
+          ctx.save(); ctx.globalAlpha = p.a; ctx.fillStyle = '#fff';
+          ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+          ctx.beginPath(); ctx.moveTo(p.shape[0].x, p.shape[0].y);
+          p.shape.forEach(pt => ctx.lineTo(pt.x, pt.y)); ctx.closePath(); ctx.fill();
+          ctx.restore();
+      }
     }
     ctx.restore();
   }
@@ -180,21 +206,19 @@
   function resetGame() {
     targets = []; particles = []; score = 0;
     spawnInterval = 100; spawnTimer = spawnInterval;
-    bullet.y = HEIGHT / 2; bullet.v = 0; bullet.rot = 0;
+    bullet.y = HEIGHT/2; bullet.v = 0; bullet.rot = 0;
     bullet.x = -bullet.w; bullet.visible = false;
     gun.y = bullet.y; gun.recoil = 0;
     gameState = 'start';
     scoreEl.textContent = 'Score: 0'; messageEl.style.display = 'block';
-    
-    // ** THE FIX IS HERE **: Pre-load targets so the world is ready on start.
-    prewarmTargets();
+    prewarmTargets(); // ** BUG FIX **: Pre-load targets so they exist on frame 1.
   }
-
+  
   function prewarmTargets() {
-      let spawnX = WIDTH + 100;
+      let spawnX = WIDTH + 150;
       for (let i = 0; i < 5; i++) {
           createTarget(spawnX);
-          spawnX += Math.random() * 150 + 100;
+          spawnX += Math.random() * 150 + 120;
       }
   }
 
@@ -205,9 +229,7 @@
     ctx.save();
     if(screenShake > 0) { ctx.translate(Math.random()*screenShake-screenShake/2, Math.random()*screenShake-screenShake/2); screenShake *= 0.9; }
     camera.zoom = lerp(camera.zoom, 1, 0.1);
-    ctx.translate(camera.x, camera.y);
-    ctx.scale(camera.zoom, camera.zoom);
-    ctx.translate(-camera.x, -camera.y);
+    ctx.translate(camera.x, camera.y); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-camera.x, -camera.y);
 
     drawScenery();
     
@@ -228,11 +250,12 @@
       }
       for (let i = targets.length - 1; i >= 0; i--) {
         const t = targets[i];
-        if (bullet.visible && Math.hypot(bullet.x + bullet.w/2 - t.x, bullet.y + bullet.h/2 - t.y) < t.r) {
-          sounds.hit.play(); createParticles(t.x, t.y, 70, '#ffc300', 8, 0.1); score++;
-          scoreEl.textContent = `Score: ${score}`;
-          t.hit = 5; setTimeout(() => targets.splice(targets.indexOf(t), 1), 80);
-          screenShake = 8;
+        if (t.active && bullet.visible && Math.hypot(bullet.x + bullet.w/2 - t.x, bullet.y + bullet.h/2 - t.y) < t.r) {
+          score++; scoreEl.textContent = `Score: ${score}`;
+          t.active = false;
+          createShatter(t.x, t.y, t.r);
+          targets.splice(i, 1);
+          screenShake = 8; camera.zoom = 1.03;
         } else if (t.x + t.r < 0) {
           sounds.fail.play(); gameState = 'gameover';
           messageEl.textContent = 'Target Missed!\nPress Space to Restart';
@@ -246,8 +269,7 @@
     targets.forEach(drawTarget);
     gun.draw(); bullet.draw();
     updateAndDrawParticles(); 
-    drawVignette(); 
-    ctx.restore();
+    drawVignette(); ctx.restore();
 
     requestAnimationFrame(update);
   }
@@ -256,9 +278,7 @@
     if (gameState === 'start') {
       sounds.gunshot.play(); gameState = 'shooting'; animationFrame = 0;
       gun.recoil = 25; gun.flash = 1; screenShake = 12; camera.zoom = 1.05;
-      bullet.x = gun.bTipX;
-      messageEl.style.display = 'none';
-      createParticles(gun.bTipX, gun.y + gun.bOffsetY, 40, '#ffc300', 12);
+      bullet.x = gun.bTipX; messageEl.style.display = 'none';
     } else if (gameState === 'playing') {
       bullet.applyThrust();
     } else if (gameState === 'gameover') {
@@ -269,9 +289,7 @@
   window.addEventListener('keydown', e => { if (e.code==='Space' || e.code==='ArrowUp') { e.preventDefault(); handleInput(); } });
   window.addEventListener('mousedown', handleInput);
   
-  initScenery();
-  resetGame();
-  update();
+  initScenery(); resetGame(); update();
 })();
 </script>
 </body>
