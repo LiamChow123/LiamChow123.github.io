@@ -1,0 +1,26 @@
+/* Make the game full screen */
+body {
+    margin: 0;
+    overflow: hidden; /* Hide scrollbars */
+    font-family: sans-serif;
+}
+
+#game-canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Style the info overlay */
+#info-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    z-index: 10;
+}
