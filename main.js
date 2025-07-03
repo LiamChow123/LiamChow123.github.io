@@ -1,17 +1,49 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 
-// --- GAME STATE ---
-let gameState = 'start'; // 'start', 'playing', 'gameOver'
+// --- CONFIGURATION ---
+const CONFIG = {
+    GRAVITY: -18,
+    PLAYER: {
+        MOVE_SPEED: 5,
+        SPRINT_SPEED: 8,
+        JUMP_FORCE: 7,
+        CAM_SMOOTHING: 0.1,
+        MAX_HEALTH: 100,
+        MAX_STAMINA: 100,
+        STAMINA_REGEN: 20,
+        STAMINA_COSTS: { SPRINT: 30, JUMP: 10, BLOCK: 60, KICK: 25 },
+        KICK_FORCE: 600,
+        DAMAGE_TAKEN: 20,
+        BLOCK_DAMAGE_REDUCTION: 0.8,
+    },
+    ENEMY: {
+        MOVE_SPEED: 4,
+        MAX_HEALTH: 100,
+        ATTACK_COOLDOWN: 1.5, // in seconds
+        ATTACK_RANGE: 3.5,
+        CHASE_RANGE: 15,
+        ATTACK_FORCE: 12,
+        DAMAGE_DEALT: 20,
+    },
+    SWORD: {
+        ARM_STRENGTH: 60,
+        BLOCK_ARM_STRENGTH: 120,
+        ROTATION_SMOOTHING: 0.2,
+        IMPACT_THRESHOLD: 4,
+    },
+    PHYSICS: {
+        FIXED_TIME_STEP: 1 / 60,
+    }
+};
 
-// --- SCENE SETUP ---
+// --- GAME STATE & SETUP ---
+let gameState = 'start';
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true; // Enable shadows
-
-// --- UI ELEMENTS ---
+renderer.shadowMap.enabled = true;
 const hud = document.getElementById('hud');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
@@ -20,321 +52,286 @@ const healthBar = document.getElementById('health-bar');
 const staminaBar = document.getElementById('stamina-bar');
 
 // --- PHYSICS WORLD ---
-const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -20, 0) }); // Stronger gravity
-const GROUP_PLAYER = 1;
-const GROUP_SWORD = 2;
-const GROUP_ENEMY = 4;
-const GROUP_GROUND = 8;
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, CONFIG.GRAVITY, 0) });
+const GROUP_PLAYER = 1, GROUP_ENEMY = 2, GROUP_SWORD_P = 4, GROUP_SWORD_E = 8, GROUP_GROUND = 16;
+const groundMaterial = new CANNON.Material("ground");
+const charMaterial = new CANNON.Material("character");
+const contactMaterial = new CANNON.ContactMaterial(groundMaterial, charMaterial, { friction: 0.1, restitution: 0.0 });
+world.addContactMaterial(contactMaterial);
 
-// --- ASSETS & SOUNDS ---
-const textureLoader = new THREE.TextureLoader();
-const audioLoader = new THREE.AudioLoader();
-const sounds = {};
-const audioListener = new THREE.AudioListener();
-camera.add(audioListener);
-
-function loadSound(name, path) {
-    audioLoader.load(path, (buffer) => {
-        sounds[name] = new THREE.Audio(audioListener);
-        sounds[name].setBuffer(buffer);
-    });
-}
-loadSound('swing', 'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/swing.mp3?v=1677353139369');
-loadSound('clash', 'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/clash.mp3?v=1677353133379');
-loadSound('hit', 'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/hit.mp3?v=1677353136200');
-
-// --- LIGHTING & ENVIRONMENT ---
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-dirLight.position.set(10, 20, 5);
+// --- ENVIRONMENT & LIGHTING ---
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(20, 30, 10);
 dirLight.castShadow = true;
 scene.add(dirLight);
 
-const groundMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(100, 100),
-    new THREE.MeshStandardMaterial({ color: 0x808080 })
-);
+const groundMesh = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x999999 }));
 groundMesh.rotation.x = -Math.PI / 2;
 groundMesh.receiveShadow = true;
 scene.add(groundMesh);
 
-const groundBody = new CANNON.Body({
-    type: CANNON.Body.STATIC,
-    shape: new CANNON.Plane(),
-    collisionFilterGroup: GROUP_GROUND,
-    collisionFilterMask: GROUP_PLAYER | GROUP_ENEMY
-});
+const groundBody = new CANNON.Body({ type: CANNON.Body.STATIC, shape: new CANNON.Plane(), material: groundMaterial, collisionFilterGroup: GROUP_GROUND, collisionFilterMask: -1 });
 groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
-const skyboxLoader = new THREE.CubeTextureLoader();
-const skybox = skyboxLoader.load([
-    'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/px.png?v=1677353597814', 'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/nx.png?v=1677353594197',
-    'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/py.png?v=1677353599020', 'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/ny.png?v=1677353595535',
-    'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/pz.png?v=1677353599742', 'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/nz.png?v=1677353596548'
+scene.background = new THREE.CubeTextureLoader().load([
+    'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/px.png', 'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/nx.png',
+    'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/py.png', 'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/ny.png',
+    'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/pz.png', 'https://cdn.glitch.global/e532a89a-53a8-4610-8557-4879a66d3336/nz.png'
 ]);
-scene.background = skybox;
 
-// --- CLASSES ---
-class Player {
-    constructor() {
-        this.maxHealth = 100;
-        this.health = this.maxHealth;
-        this.maxStamina = 100;
-        this.stamina = this.maxStamina;
+// --- INPUT CONTROLLER ---
+const input = { keys: new Set(), mouse: { x: 0, y: 0, rightClick: false } };
+window.addEventListener('keydown', (e) => input.keys.add(e.code));
+window.addEventListener('keyup', (e) => input.keys.delete(e.code));
+window.addEventListener('mousedown', (e) => { if (e.button === 2) input.mouse.rightClick = true; });
+window.addEventListener('mouseup', (e) => { if (e.button === 2) input.mouse.rightClick = false; });
+window.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement) {
+        input.mouse.x += e.movementX;
+        input.mouse.y += e.movementY;
+    }
+});
 
-        // Player model (Capsule)
-        const radius = 0.5, height = 1;
-        this.mesh = new THREE.Mesh(
-            new THREE.CapsuleGeometry(radius, height),
-            new THREE.MeshStandardMaterial({ color: 0xeeeeee, visible: false })
-        );
+// --- CHARACTER & SWORD CLASSES ---
+class Character {
+    constructor(config, startPos, group, color) {
+        this.config = config;
+        this.health = this.config.MAX_HEALTH;
+        this.mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial({ color }));
         this.mesh.castShadow = true;
         scene.add(this.mesh);
-
+        
         this.body = new CANNON.Body({
-            mass: 70,
-            shape: new CANNON.Cylinder(radius, radius, height + 2 * radius, 12),
-            collisionFilterGroup: GROUP_PLAYER,
-            collisionFilterMask: GROUP_GROUND | GROUP_ENEMY
+            mass: 70, fixedRotation: true, material: charMaterial,
+            shape: new CANNON.Box(new CANNON.Vec3(0.5, 1, 0.5)),
+            position: new CANNON.Vec3(...startPos),
+            collisionFilterGroup: group
         });
         world.addBody(this.body);
 
-        this.sword = new Sword(GROUP_SWORD, GROUP_ENEMY, 0xC0C0C0);
-        this.input = { fwd: 0, back: 0, left: 0, right: 0, jump: false, sprint: false, block: false, kick: false };
-        this.mouse = { x: 0, y: 0 };
-        this.initEventListeners();
+        this.previousState = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() };
+        this.storeState();
     }
 
-    initEventListeners() {
-        const keyMap = { 'KeyW': 'fwd', 'KeyS': 'back', 'KeyA': 'left', 'KeyD': 'right', 'Space': 'jump', 'ShiftLeft': 'sprint', 'KeyF': 'kick' };
-        window.addEventListener('keydown', e => { if (keyMap[e.code]) this.input[keyMap[e.code]] = true; });
-        window.addEventListener('keyup', e => { if (keyMap[e.code]) this.input[keyMap[e.code]] = false; });
-        window.addEventListener('mousedown', e => { if (e.button === 2) this.input.block = true; });
-        window.addEventListener('mouseup', e => { if (e.button === 2) this.input.block = false; });
-        document.addEventListener('mousemove', e => {
-            if (document.pointerLockElement) {
-                this.mouse.x += e.movementX;
-                this.mouse.y += e.movementY;
-            }
-        });
-    }
-
-    takeDamage(amount) {
+    takeDamage(amount, sourceBody) {
         this.health = Math.max(0, this.health - amount);
-        if (this.health === 0) {
-            endGame(false); // Player lost
-        }
+        this.mesh.material.color.set(0xffffff);
+        setTimeout(() => this.mesh.material.color.set(this.originalColor), 100);
     }
     
-    update(deltaTime) {
-        // Stamina regen
-        if (!this.input.sprint && !this.input.block) {
-            this.stamina = Math.min(this.maxStamina, this.stamina + 15 * deltaTime);
-        }
-        
-        // Movement
-        const speed = this.input.sprint && this.stamina > 0 ? 8 : 4;
-        if (this.input.sprint) this.stamina = Math.max(0, this.stamina - 30 * deltaTime);
+    storeState() {
+        this.previousState.position.copy(this.body.position);
+        this.previousState.quaternion.copy(this.body.quaternion);
+    }
 
-        const moveDir = new THREE.Vector3(this.input.right - this.input.left, 0, this.input.back - this.input.fwd);
-        moveDir.normalize().applyAxisAngle(new THREE.Vector3(0,1,0), camera.rotation.y);
-        this.body.velocity.x = moveDir.x * speed;
-        this.body.velocity.z = moveDir.z * speed;
-
-        // Jump
-        if (this.input.jump && this.stamina > 10) {
-             // Simple ground check
-            const from = new CANNON.Vec3(this.body.position.x, this.body.position.y - 1.5, this.body.position.z);
-            const to = new CANNON.Vec3(this.body.position.x, this.body.position.y - 1.6, this.body.position.z);
-            const result = new CANNON.RaycastResult();
-            if (world.raycastClosest(from, to, {}, result)) {
-                this.body.velocity.y = 10;
-                this.stamina -= 10;
-            }
-            this.input.jump = false;
-        }
-
-        // Kick
-        if (this.input.kick && this.stamina > 20) {
-            // Check if enemy is close
-            const distance = this.body.position.distanceTo(enemy.body.position);
-            if(distance < 2.5) {
-                const kickDir = new CANNON.Vec3();
-                enemy.body.position.vsub(this.body.position, kickDir);
-                kickDir.normalize();
-                enemy.body.applyImpulse(kickDir.scale(300), enemy.body.position);
-                if(sounds.swing) sounds.swing.play();
-            }
-            this.stamina -= 20;
-            this.input.kick = false;
-        }
-
-        // Camera
-        camera.position.copy(this.body.position);
-        camera.position.y += 1.8;
-        camera.rotation.y = -this.mouse.x * 0.002;
-        camera.rotation.x = -this.mouse.y * 0.002;
-        camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
-        
-        this.sword.update(camera, this.input.block);
-        this.mesh.position.copy(this.body.position);
+    interpolateState(alpha) {
+        this.mesh.position.lerpVectors(this.previousState.position, this.body.position, alpha);
+        this.mesh.quaternion.slerpQuaternions(this.previousState.quaternion, this.body.quaternion, alpha);
     }
 }
 
-class Enemy {
-    constructor() {
-        this.maxHealth = 100;
-        this.health = this.maxHealth;
+class Player extends Character {
+    constructor(startPos) {
+        super(CONFIG.PLAYER, startPos, GROUP_PLAYER, 0xeeeeee);
+        this.originalColor = 0xeeeeee;
+        this.stamina = this.config.MAX_STAMINA;
+        this.isBlocking = false;
+        this.targetCameraRotation = { x: 0, y: 0 };
+        this.sword = new Sword(GROUP_SWORD_P, 0xC0C0C0, this);
+        this.mesh.visible = false; // First-person
+        this.body.addEventListener("collide", (e) => this.onCollide(e));
+    }
 
-        this.mesh = new THREE.Mesh(
-            new THREE.CapsuleGeometry(0.5, 1.0),
-            new THREE.MeshStandardMaterial({ color: 0xff0000 })
-        );
-        this.mesh.castShadow = true;
-        scene.add(this.mesh);
-
-        this.body = new CANNON.Body({
-            mass: 90,
-            shape: new CANNON.Cylinder(0.5, 0.5, 2, 12),
-            collisionFilterGroup: GROUP_ENEMY,
-            collisionFilterMask: GROUP_GROUND | GROUP_PLAYER | GROUP_SWORD
-        });
-        world.addBody(this.body);
-
-        this.sword = new Sword(GROUP_SWORD, GROUP_PLAYER, 0x505050);
-
-        this.body.addEventListener("collide", (event) => {
-            if (event.body === player.sword.body) {
-                const impact = event.contact.getImpactVelocityAlongNormal();
-                if (Math.abs(impact) > 4) {
-                    this.takeDamage(20);
-                    if(sounds.hit) sounds.hit.play();
-                    // Knockback
-                    const impulseDir = new CANNON.Vec3();
-                    player.body.position.vsub(this.body.position, impulseDir);
-                    impulseDir.normalize();
-                    this.body.applyImpulse(impulseDir.scale(-50), this.body.position);
-                } else if (Math.abs(impact) > 1) {
-                    if(sounds.clash) sounds.clash.play();
-                }
+    onCollide(e) {
+        if (e.body === enemy.sword.body) {
+            const impact = e.contact.getImpactVelocityAlongNormal();
+            if (Math.abs(impact) > CONFIG.SWORD.IMPACT_THRESHOLD) {
+                const damage = CONFIG.ENEMY.DAMAGE_DEALT * (this.isBlocking ? 1 - this.config.BLOCK_DAMAGE_REDUCTION : 1);
+                this.takeDamage(damage);
             }
-        });
+        }
     }
 
     takeDamage(amount) {
-        this.health = Math.max(0, this.health - amount);
-        this.mesh.material.color.set(0xffffff);
-        setTimeout(() => this.mesh.material.color.set(0xff0000), 100);
-        if (this.health === 0) {
-            endGame(true); // Player won
-        }
+        super.takeDamage(amount);
+        if (this.health === 0) endGame(false);
+        this.shakeCamera();
+    }
+    
+    shakeCamera() {
+        camera.position.x += (Math.random() - 0.5) * 0.2;
     }
 
     update(deltaTime) {
-        const distance = this.body.position.distanceTo(player.body.position);
-        const direction = new CANNON.Vec3();
-        player.body.position.vsub(this.body.position, direction);
-        direction.normalize();
+        this.isBlocking = input.mouse.rightClick && this.stamina > 0;
 
-        // AI Logic
-        if (distance > 3) { // Chase
-            this.body.velocity.x = direction.x * 3;
-            this.body.velocity.z = direction.z * 3;
-        } else { // Attack
-            this.body.velocity.x *= 0.8;
-            this.body.velocity.z *= 0.8;
-            this.sword.attack(this.body.position, player.body.position);
+        // Stamina
+        if (!input.keys.has('ShiftLeft') && !this.isBlocking) this.stamina = Math.min(this.config.MAX_STAMINA, this.stamina + this.config.STAMINA_REGEN * deltaTime);
+        if (input.keys.has('ShiftLeft')) this.stamina = Math.max(0, this.stamina - this.config.STAMINA_COSTS.SPRINT * deltaTime);
+        if (this.isBlocking) this.stamina = Math.max(0, this.stamina - this.config.STAMINA_COSTS.BLOCK * deltaTime);
+
+        // Movement
+        const speed = input.keys.has('ShiftLeft') && this.stamina > 0 ? this.config.SPRINT_SPEED : this.config.MOVE_SPEED;
+        const moveDir = new THREE.Vector3((input.keys.has('KeyD') ? 1:0)-(input.keys.has('KeyA')?1:0), 0, (input.keys.has('KeyS')?1:0)-(input.keys.has('KeyW')?1:0));
+        if (moveDir.lengthSq() > 0) {
+            moveDir.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.targetCameraRotation.y);
+            this.body.velocity.x = moveDir.x * speed;
+            this.body.velocity.z = moveDir.z * speed;
         }
+
+        // Jump & Kick (single press actions)
+        if (input.keys.has('Space') && this.stamina > this.config.STAMINA_COSTS.JUMP) {
+            if (world.raycastClosest(this.body.position, new CANNON.Vec3(this.body.position.x, this.body.position.y - 1.1, this.body.position.z), {})) {
+                this.body.velocity.y = this.config.JUMP_FORCE;
+                this.stamina -= this.config.STAMINA_COSTS.JUMP;
+            }
+        }
+        if (input.keys.has('KeyF') && this.stamina > this.config.STAMINA_COSTS.KICK) {
+            if (this.body.position.distanceTo(enemy.body.position) < 2.5) {
+                const kickDir = enemy.body.position.vsub(this.body.position).unit();
+                enemy.body.applyImpulse(kickDir.scale(this.config.KICK_FORCE), enemy.body.position);
+            }
+            this.stamina -= this.config.STAMINA_COSTS.KICK;
+        }
+        input.keys.delete('Space');
+        input.keys.delete('KeyF');
         
-        // Face player
+        // Camera
+        this.targetCameraRotation.y -= input.mouse.x * 0.002;
+        this.targetCameraRotation.x -= input.mouse.y * 0.002;
+        this.targetCameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.targetCameraRotation.x));
+        input.mouse.x = input.mouse.y = 0; // Reset mouse movement
+
+        camera.rotation.y += (this.targetCameraRotation.y - camera.rotation.y) * this.config.CAM_SMOOTHING;
+        camera.rotation.x += (this.targetCameraRotation.x - camera.rotation.x) * this.config.CAM_SMOOTHING;
+        camera.position.copy(this.body.position).y += 1.8;
+        
+        this.sword.update(this.isBlocking);
+    }
+}
+
+class Enemy extends Character {
+    constructor(startPos) {
+        super(CONFIG.ENEMY, startPos, GROUP_ENEMY, 0xff0000);
+        this.originalColor = 0xff0000;
+        this.state = 'CHASING';
+        this.attackTimer = this.config.ATTACK_COOLDOWN;
+        this.sword = new Sword(GROUP_SWORD_E, 0x505050, this);
+        this.body.addEventListener("collide", (e) => this.onCollide(e));
+    }
+
+    onCollide(e) {
+        if (e.body === player.sword.body) {
+            const impact = e.contact.getImpactVelocityAlongNormal();
+            if (Math.abs(impact) > CONFIG.SWORD.IMPACT_THRESHOLD) {
+                this.takeDamage(CONFIG.PLAYER.DAMAGE_TAKEN, player.body);
+            }
+        }
+    }
+
+    takeDamage(amount, sourceBody) {
+        super.takeDamage(amount);
+        if (this.health === 0) endGame(true);
+        const impulseDir = this.body.position.vsub(sourceBody.position).unit();
+        this.body.applyImpulse(impulseDir.scale(150), this.body.position);
+    }
+
+    update(deltaTime) {
+        this.attackTimer -= deltaTime;
+        const distance = this.body.position.distanceTo(player.body.position);
+        const direction = player.body.position.vsub(this.body.position).unit();
+        
+        // State Machine
+        if (distance < this.config.ATTACK_RANGE) this.state = 'ATTACKING';
+        else if (distance < this.config.CHASE_RANGE) this.state = 'CHASING';
+        
+        switch(this.state) {
+            case 'CHASING':
+                this.body.velocity.x = direction.x * this.config.MOVE_SPEED;
+                this.body.velocity.z = direction.z * this.config.MOVE_SPEED;
+                break;
+            case 'ATTACKING':
+                if (this.attackTimer <= 0) {
+                    this.sword.body.velocity.copy(direction.scale(this.config.ATTACK_FORCE));
+                    this.attackTimer = this.config.ATTACK_COOLDOWN;
+                }
+                break;
+        }
+
         const angle = Math.atan2(direction.x, direction.z);
         this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
-        
-        this.sword.update(this.mesh, false); // Enemy doesn't block
-        this.mesh.position.copy(this.body.position);
-        this.mesh.quaternion.copy(this.body.quaternion);
+        this.sword.update();
     }
 }
 
 class Sword {
-    constructor(group, mask, color) {
-        this.mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(0.1, 0.1, 1.5),
-            new THREE.MeshStandardMaterial({ color: color })
-        );
+    constructor(group, color, owner) {
+        this.owner = owner;
+        this.mesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 1.8), new THREE.MeshStandardMaterial({ color }));
         this.mesh.castShadow = true;
         scene.add(this.mesh);
-
-        this.body = new CANNON.Body({
-            mass: 2,
-            shape: new CANNON.Box(new CANNON.Vec3(0.05, 0.05, 0.75)),
-            collisionFilterGroup: group,
-            collisionFilterMask: mask | GROUP_GROUND
-        });
-        world.addBody(this.body);
-    }
-
-    update(parent, isBlocking) {
-        const target = new THREE.Object3D();
-        const armStrength = isBlocking ? 100 : 30; // Stiffer arm when blocking
-        const positionOffset = isBlocking ? new THREE.Vector3(0.3, -0.1, -1.2) : new THREE.Vector3(0.5, -0.4, -1.5);
-       
-        if (parent instanceof THREE.Camera) { // Player's sword
-            target.position.copy(positionOffset);
-            parent.add(target);
-            
-            const worldPos = new THREE.Vector3();
-            target.getWorldPosition(worldPos);
-            
-            const force = new CANNON.Vec3();
-            worldPos.vsub(this.body.position, force);
-            force.scale(armStrength, this.body.velocity);
-
-            const worldQuat = new THREE.Quaternion();
-            parent.getWorldQuaternion(worldQuat);
-            this.body.quaternion.slerp(worldQuat.clone(), 0.3, this.body.quaternion);
-
-        } else { // Enemy's sword
-            this.body.position.copy(parent.position).vadd(new CANNON.Vec3(0,0.5,0.7).applyQuaternion(parent.quaternion), this.body.position);
-            this.body.quaternion.copy(parent.quaternion);
-        }
         
-        this.mesh.position.copy(this.body.position);
-        this.mesh.quaternion.copy(this.body.quaternion);
+        this.body = new CANNON.Body({ mass: 1, shape: new CANNON.Box(new CANNON.Vec3(0.05, 0.05, 0.9)) });
+        this.body.collisionFilterGroup = group;
+        this.body.collisionFilterMask = -1 ^ group ^ (owner instanceof Player ? GROUP_PLAYER : GROUP_ENEMY);
+        world.addBody(this.body);
+        
+        this.previousState = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() };
+        this.storeState();
     }
     
-    attack(fromPos, toPos) {
-        const direction = new CANNON.Vec3();
-        toPos.vsub(fromPos, direction);
-        direction.normalize();
-        this.body.velocity.copy(direction.scale(10));
+    storeState() {
+        this.previousState.position.copy(this.body.position);
+        this.previousState.quaternion.copy(this.body.quaternion);
+    }
+    
+    interpolateState(alpha) {
+        this.mesh.position.lerpVectors(this.previousState.position, this.body.position, alpha);
+        this.mesh.quaternion.slerpQuaternions(this.previousState.quaternion, this.body.quaternion, alpha);
+    }
+
+    update(isBlocking = false) {
+        if (this.owner instanceof Player) { // Player sword logic
+            const targetPos = new THREE.Vector3();
+            const armStrength = isBlocking ? CONFIG.SWORD.BLOCK_ARM_STRENGTH : CONFIG.SWORD.ARM_STRENGTH;
+            const offset = isBlocking ? new THREE.Vector3(0.3, -0.1, -1.2) : new THREE.Vector3(0.5, -0.4, -1.5);
+            camera.localToWorld(targetPos.copy(offset));
+            const force = targetPos.vsub(this.body.position).scale(armStrength);
+            this.body.velocity.copy(force);
+            
+            const targetQuat = new CANNON.Quaternion();
+            camera.getWorldQuaternion(targetQuat);
+            this.body.quaternion.slerp(targetQuat, CONFIG.SWORD.ROTATION_SMOOTHING, this.body.quaternion);
+        } else { // Enemy sword logic
+            const offset = new CANNON.Vec3(0, 0.5, 1);
+            this.owner.body.quaternion.vmult(offset, offset);
+            this.body.position.copy(this.owner.body.position).vadd(offset, this.body.position);
+            this.body.quaternion.copy(this.owner.body.quaternion);
+        }
     }
 }
 
-// --- GAME INSTANCES ---
-let player, enemy;
+// --- GAME MANAGEMENT ---
+let player, enemy, gameObjects;
 
 function initGame() {
-    player = new Player();
-    enemy = new Enemy();
-    
-    player.body.position.set(0, 2, 8);
-    enemy.body.position.set(0, 2, 0);
+    player = new Player([0, 2, 8]);
+    enemy = new Enemy([0, 2, 0]);
+    gameObjects = [player, enemy, player.sword, enemy.sword];
 }
 
 function resetGame() {
-    player.health = player.maxHealth;
-    player.stamina = player.maxStamina;
+    player.health = player.config.MAX_HEALTH;
+    player.stamina = player.config.MAX_STAMINA;
     player.body.position.set(0, 2, 8);
     player.body.velocity.set(0,0,0);
-    player.body.angularVelocity.set(0,0,0);
     
-    enemy.health = enemy.maxHealth;
+    enemy.health = enemy.config.MAX_HEALTH;
     enemy.body.position.set(0, 2, 0);
     enemy.body.velocity.set(0,0,0);
-    enemy.body.angularVelocity.set(0,0,0);
-
+    
     gameState = 'playing';
     hud.style.display = 'block';
     overlay.style.display = 'none';
@@ -342,60 +339,53 @@ function resetGame() {
 }
 
 function endGame(playerWon) {
+    if (gameState === 'gameOver') return;
     gameState = 'gameOver';
     hud.style.display = 'none';
     overlay.style.display = 'block';
     document.exitPointerLock();
-    
-    if(playerWon) {
-        overlayTitle.innerText = "VICTORY";
-        overlayText.innerHTML = "You have defeated the Red Knight.<br><br><strong class='pulse'>Press ENTER to Play Again</strong>";
-    } else {
-        overlayTitle.innerText = "YOU DIED";
-        overlayText.innerHTML = "The arena claims another warrior.<br><br><strong class='pulse'>Press ENTER to Try Again</strong>";
-    }
+    overlayTitle.innerText = playerWon ? "VICTORY" : "YOU DIED";
+    overlayText.innerHTML = (playerWon ? "You have defeated the Red Knight." : "The arena claims another warrior.") + "<br><br><strong class='pulse'>Press ENTER to Play Again</strong>";
 }
 
 // --- MAIN LOOP ---
 const clock = new THREE.Clock();
-let oldElapsedTime = 0;
-
+let accumulator = 0;
 function animate() {
     requestAnimationFrame(animate);
-
-    const elapsedTime = clock.getElapsedTime();
-    const deltaTime = elapsedTime - oldElapsedTime;
-    oldElapsedTime = elapsedTime;
+    const deltaTime = clock.getDelta();
 
     if (gameState === 'playing') {
-        world.step(1 / 60, deltaTime, 3);
         player.update(deltaTime);
         enemy.update(deltaTime);
         
-        // Update HUD
-        healthBar.style.width = (player.health / player.maxHealth) * 100 + '%';
-        staminaBar.style.width = (player.stamina / player.maxStamina) * 100 + '%';
+        accumulator += deltaTime;
+        while (accumulator >= CONFIG.PHYSICS.FIXED_TIME_STEP) {
+            gameObjects.forEach(obj => obj.storeState());
+            world.step(CONFIG.PHYSICS.FIXED_TIME_STEP);
+            accumulator -= CONFIG.PHYSICS.FIXED_TIME_STEP;
+        }
+        
+        const alpha = accumulator / CONFIG.PHYSICS.FIXED_TIME_STEP;
+        gameObjects.forEach(obj => obj.interpolateState(alpha));
+
+        healthBar.style.width = (player.health / player.config.MAX_HEALTH) * 100 + '%';
+        staminaBar.style.width = (player.stamina / player.config.MAX_STAMINA) * 100 + '%';
     }
-    
+
     renderer.render(scene, camera);
 }
 
-// --- EVENT LISTENERS ---
+// --- INITIALIZE & START ---
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
 window.addEventListener('keydown', (e) => {
-    if (e.code === 'Enter' && (gameState === 'start' || gameState === 'gameOver')) {
-        resetGame();
-    }
+    if (e.code === 'Enter' && (gameState === 'start' || gameState === 'gameOver')) resetGame();
 });
-
-// Disable right-click context menu
 window.addEventListener('contextmenu', e => e.preventDefault());
 
-// --- START ---
 initGame();
 animate();
