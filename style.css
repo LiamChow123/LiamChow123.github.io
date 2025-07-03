@@ -19,8 +19,8 @@ body {
     width: 100%;
     height: 100%;
     color: white;
-    pointer-events: none; /* Allows mouse to pass through */
-    display: none; /* Hidden by default */
+    pointer-events: none;
+    display: none;
 }
 
 #crosshair {
@@ -34,19 +34,16 @@ body {
 
 .bar-container {
     position: absolute;
-    bottom: 20px;
+    bottom: 20px; /* Only one bar, so position it at the bottom */
     left: 20px;
     width: 250px;
 }
-.bar-container:nth-of-type(2) { /* Stamina Bar */
-    bottom: 65px;
-}
 .bar-container span {
     font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8); /* Added shadow for readability */
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
 }
 
-#health-bar-bg, #stamina-bar-bg {
+#health-bar-bg { /* Removed stamina-specific rules */
     width: 100%;
     height: 20px;
     background-color: rgba(0,0,0,0.5);
@@ -61,14 +58,6 @@ body {
     background-color: #c0392b;
     border-radius: 3px;
     transition: width 0.2s ease-out;
-}
-
-#stamina-bar {
-    width: 100%;
-    height: 100%;
-    background-color: #27ae60;
-    border-radius: 3px;
-    transition: width 0.1s linear;
 }
 
 /* --- OVERLAY STYLES --- */
