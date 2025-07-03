@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css?family=DynaPuff');
+.finley-img {
+  text-align: center;
+  display: block;
+background: royalblue ;
+}
+h1 {
+ text-decoration: underline; 
+ text-align: center;
+ font-size: 50px;
+  background: skyblue;
+    border: solid 7px lightblue; 
+}
+h1:hover span {
+  display: none
+}
+h1:hover:after {
+  content: " Gray";
+}
+
+.finley-description {
+font-size: 25px;
+  margin: 10px 100px;
+  text-align: center;
+}
+.description-title {
+ font-size: 30px;
+  font-weight: bold;
+  text-decoration: underline;
+  text-align: center;
+  margin: 10px;
+}
+.finley-section {
+  border: solid 7px lightblue; 
+}
+.all-description {
+  border: solid 4px lightblue;
+}
+.finley-description {
+  font-weight: bold;
+  font-family: "DynaPuff";
+  background: lightblue;
+  font-size: 35px
+}
+.finley-description:hover span {
+  display: none
+}
+.finley-description:hover:after {
+  content: "(No he isn't)";
+  color: red;
+}
